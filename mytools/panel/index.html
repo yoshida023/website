@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>preBuild for hp2025 - LINE Stamp Editor</title>
+    <title>LINE Stamp Haichi Editor</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -145,10 +145,10 @@
 </head>
 <body>
 
-<h1>preBuild for hp2025</h1>
+<h1>LINE Stamp Haichi Editor v1.01</h1>
 
 <div class="action-panel">
-    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (番号自動判別)</button>
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード</button>
 </div>
 
 <div class="header-container">
@@ -170,8 +170,7 @@
     </div>
 </div>
 
-<div id="sortable-grid" class="stamp-grid">
-    </div>
+<div id="sortable-grid" class="stamp-grid"></div>
 
 <div class="footer-bar">
     <button class="btn-zip" onclick="generateZip()">ZIPを生成して保存</button>
@@ -234,20 +233,17 @@
     multiInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
         const stampCards = Array.from(grid.querySelectorAll('.item-card'));
-        
-        // 未割り当てのファイルを一時保持する配列
         const leftoverFiles = [];
 
         for (const file of files) {
             const fileName = file.name.toLowerCase();
-            const baseName = fileName.split('.')[0]; // 拡張子を除く
+            const baseName = fileName.split('.')[0];
 
             if (fileName.includes('main')) {
                 await renderToCard(file, 'card-main');
             } else if (fileName.includes('tab')) {
                 await renderToCard(file, 'card-tab');
             } else {
-                // 数字のみ、あるいは数字で始まるかチェック
                 const numMatch = baseName.match(/^\d+/);
                 if (numMatch) {
                     const num = numMatch[0].padStart(2, '0');
@@ -263,7 +259,6 @@
             }
         }
 
-        // 番号指定がなかったファイルは、空いている枠、または前から順に埋める
         let cardIdx = 0;
         for (const file of leftoverFiles) {
             while (cardIdx < stampCards.length) {
@@ -310,10 +305,20 @@
             await addToZip(zip, card.id, 370, 320, `${label}.png`);
         }
         if (Object.keys(zip.files).length === 0) return alert("画像がありません");
+
         const content = await zip.generateAsync({type: "blob"});
+        
+        // タイムスタンプ生成 (YYYYMMDD_HHMM)
+        const now = new Date();
+        const timestamp = now.getFullYear() + 
+            String(now.getMonth() + 1).padStart(2, '0') + 
+            String(now.getDate()).padStart(2, '0') + "_" + 
+            String(now.getHours()).padStart(2, '0') + 
+            String(now.getMinutes()).padStart(2, '0');
+
         const link = document.createElement('a');
         link.href = URL.createObjectURL(content);
-        link.download = "line_stamps.zip";
+        link.download = `line_stamps_${timestamp}.zip`;
         link.click();
     }
 
