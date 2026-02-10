@@ -28,7 +28,6 @@
 
         h1 { font-size: 1rem; text-align: center; margin: 5px 0; color: #333; }
 
-        /* 操作パネル */
         .action-panel {
             display: flex;
             justify-content: center;
@@ -39,7 +38,7 @@
         .btn-multi {
             background: var(--multi);
             color: white;
-            padding: 8px 15px;
+            padding: 10px 15px;
             border-radius: 6px;
             font-size: 13px;
             border: none;
@@ -77,9 +76,9 @@
 
         .label { 
             display: block; 
-            font-size: 10px; 
+            font-size: 11px; 
             font-weight: bold; 
-            color: #888; 
+            color: #555; 
             margin-bottom: 2px;
             pointer-events: none;
         }
@@ -151,7 +150,7 @@
 <h1>preBuild for hp2025</h1>
 
 <div class="action-panel">
-    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (001~)</button>
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (01~)</button>
 </div>
 
 <div class="header-container">
@@ -177,7 +176,7 @@
     </div>
 
 <div class="footer-bar">
-    <button class="btn-zip" onclick="generateZip()">ZIPを生成して保存</button>
+    <button class="btn-zip" onclick="generateZip()">ZIPを生成 (01.png~)</button>
 </div>
 
 <input type="file" id="file-input-single" accept="image/png,image/jpeg" style="display:none">
@@ -189,9 +188,9 @@
     const multiInput = document.getElementById('file-input-multi');
     let currentSingleTargetId = null;
 
-    // 1. 初期化
+    // 1. 初期化 (01〜40)
     for (let i = 1; i <= 40; i++) {
-        const id = String(i).padStart(3, '0');
+        const id = String(i).padStart(2, '0');
         const card = document.createElement('div');
         card.className = 'item-card';
         card.id = `card-${id}`;
@@ -206,7 +205,7 @@
         grid.appendChild(card);
     }
 
-    // 2. 入れ替え設定
+    // 2. 並び替え設定
     new Sortable(grid, {
         swap: true,
         swapClass: 'sortable-swap-highlight',
@@ -218,11 +217,11 @@
 
     function reLabelCards() {
         grid.querySelectorAll('.item-card').forEach((card, index) => {
-            card.querySelector('.label').innerText = String(index + 1).padStart(3, '0');
+            // ラベルを2桁（01, 02...）に更新
+            card.querySelector('.label').innerText = String(index + 1).padStart(2, '0');
         });
     }
 
-    // 単体アップロード
     function triggerSingleUpload(id) {
         currentSingleTargetId = id;
         singleInput.click();
@@ -234,7 +233,6 @@
         e.target.value = "";
     };
 
-    // 一括アップロード
     function triggerMultiUpload() {
         multiInput.click();
     }
@@ -270,9 +268,12 @@
 
     async function generateZip() {
         const zip = new JSZip();
+        
+        // main / tab
         await addToZip(zip, 'card-main', 240, 240, 'main.png');
         await addToZip(zip, 'card-tab', 96, 74, 'tab.png');
 
+        // 01.png ~ 40.png
         const cards = grid.querySelectorAll('.item-card');
         for (const card of cards) {
             const label = card.querySelector('.label').innerText;
@@ -294,7 +295,8 @@
 
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         zip.file(fileName, blob);
     }
