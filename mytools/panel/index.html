@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LINE Stamp Editor</title>
+    <title>preBuild for hp2025 - LINE Stamp Editor</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -71,7 +71,6 @@
         
         .item-card.has-image { border-color: var(--accent); }
 
-        /* ハンドル部分（ここを掴まないと動かないようにしてスクロールを優先） */
         .drag-handle { 
             display: block; 
             font-size: 11px; 
@@ -146,10 +145,10 @@
 </head>
 <body>
 
-<h1>LINEスタンプ配置エディタv1.00</h1>
+<h1>preBuild for hp2025</h1>
 
 <div class="action-panel">
-    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (main/tab対応)</button>
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (番号自動判別)</button>
 </div>
 
 <div class="header-container">
@@ -187,7 +186,6 @@
     const multiInput = document.getElementById('file-input-multi');
     let currentSingleTargetId = null;
 
-    // 1. スタンプ枠初期化
     for (let i = 1; i <= 40; i++) {
         const id = String(i).padStart(2, '0');
         const card = document.createElement('div');
@@ -204,11 +202,10 @@
         grid.appendChild(card);
     }
 
-    // 2. 並び替え設定 (handleを追加してスクロールを邪魔しないように)
     new Sortable(grid, {
         swap: true,
         swapClass: 'sortable-swap-highlight',
-        handle: '.drag-handle', // 数字ラベル部分のみドラッグ可能
+        handle: '.drag-handle',
         animation: 150,
         onEnd: () => reLabelCards()
     });
@@ -237,19 +234,46 @@
     multiInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
         const stampCards = Array.from(grid.querySelectorAll('.item-card'));
-        let stampIdx = 0;
+        
+        // 未割り当てのファイルを一時保持する配列
+        const leftoverFiles = [];
 
         for (const file of files) {
-            const name = file.name.toLowerCase();
-            if (name.includes('main')) {
+            const fileName = file.name.toLowerCase();
+            const baseName = fileName.split('.')[0]; // 拡張子を除く
+
+            if (fileName.includes('main')) {
                 await renderToCard(file, 'card-main');
-            } else if (name.includes('tab')) {
+            } else if (fileName.includes('tab')) {
                 await renderToCard(file, 'card-tab');
             } else {
-                if (stampIdx < stampCards.length) {
-                    await renderToCard(file, stampCards[stampIdx].id);
-                    stampIdx++;
+                // 数字のみ、あるいは数字で始まるかチェック
+                const numMatch = baseName.match(/^\d+/);
+                if (numMatch) {
+                    const num = numMatch[0].padStart(2, '0');
+                    const targetCard = document.getElementById(`card-${num}`);
+                    if (targetCard) {
+                        await renderToCard(file, targetCard.id);
+                    } else {
+                        leftoverFiles.push(file);
+                    }
+                } else {
+                    leftoverFiles.push(file);
                 }
+            }
+        }
+
+        // 番号指定がなかったファイルは、空いている枠、または前から順に埋める
+        let cardIdx = 0;
+        for (const file of leftoverFiles) {
+            while (cardIdx < stampCards.length) {
+                const card = stampCards[cardIdx];
+                if (!card.classList.contains('has-image')) {
+                    await renderToCard(file, card.id);
+                    cardIdx++;
+                    break;
+                }
+                cardIdx++;
             }
         }
         e.target.value = "";
@@ -280,15 +304,12 @@
         const zip = new JSZip();
         await addToZip(zip, 'card-main', 240, 240, 'main.png');
         await addToZip(zip, 'card-tab', 96, 74, 'tab.png');
-
         const cards = grid.querySelectorAll('.item-card');
         for (const card of cards) {
             const label = card.querySelector('.drag-handle').innerText;
             await addToZip(zip, card.id, 370, 320, `${label}.png`);
         }
-
         if (Object.keys(zip.files).length === 0) return alert("画像がありません");
-
         const content = await zip.generateAsync({type: "blob"});
         const link = document.createElement('a');
         link.href = URL.createObjectURL(content);
