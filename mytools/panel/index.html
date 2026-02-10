@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>preBuild for hp2025 - LINE Stamp Editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary: #00b900;
+            --accent: #007aff;
+            --multi: #6f42c1;
+        }
+
+        * { box-sizing: border-box; }
+
+        body { 
+            font-family: -apple-system, sans-serif; 
+            background: var(--bg-color); 
+            margin: 0; 
+            padding: 10px; 
+            padding-bottom: 120px;
+            overflow-x: hidden;
+        }
+
+        h1 { font-size: 1rem; text-align: center; margin: 5px 0; color: #333; }
+
+        /* 操作パネル */
+        .action-panel {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn-multi {
+            background: var(--multi);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            border: none;
+            font-weight: bold;
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .header-container .item-card { width: 45%; }
+
+        .stamp-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            width: 100%;
+        }
+
+        .item-card {
+            background: var(--card-bg);
+            border-radius: 6px;
+            padding: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 1.5px solid transparent;
+            touch-action: none;
+            position: relative;
+        }
+        
+        .item-card.has-image { border-color: var(--accent); }
+
+        .label { 
+            display: block; 
+            font-size: 10px; 
+            font-weight: bold; 
+            color: #888; 
+            margin-bottom: 2px;
+            pointer-events: none;
+        }
+
+        .preview-container {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: #fff;
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), 
+                              linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee);
+            background-size: 8px 8px;
+            background-position: 0 0, 4px 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 4px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            pointer-events: none;
+        }
+
+        img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        .controls { display: flex; gap: 2px; }
+
+        button {
+            border: none;
+            border-radius: 4px;
+            padding: 8px 0;
+            font-size: 10px;
+            flex: 1;
+            font-weight: bold;
+        }
+
+        .btn-upload { background: var(--accent); color: white; }
+        .btn-delete { background: #eee; color: #666; }
+
+        .footer-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .btn-zip {
+            background: var(--primary);
+            color: white;
+            padding: 12px 0;
+            font-size: 16px;
+            border-radius: 8px;
+            width: 90%;
+            border: none;
+            font-weight: bold;
+        }
+
+        .sortable-swap-highlight {
+            background-color: rgba(0, 122, 255, 0.2) !important;
+            border: 1.5px solid var(--accent) !important;
+        }
+    </style>
+</head>
+<body>
+
+<h1>preBuild for hp2025</h1>
+
+<div class="action-panel">
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (001~)</button>
+</div>
+
+<div class="header-container">
+    <div class="item-card" id="card-main">
+        <span class="label">main</span>
+        <div class="preview-container"></div>
+        <div class="controls">
+            <button class="btn-upload" onclick="triggerSingleUpload('main')">UP</button>
+            <button class="btn-delete" onclick="deleteImage('card-main')">×</button>
+        </div>
+    </div>
+    <div class="item-card" id="card-tab">
+        <span class="label">tab</span>
+        <div class="preview-container"></div>
+        <div class="controls">
+            <button class="btn-upload" onclick="triggerSingleUpload('tab')">UP</button>
+            <button class="btn-delete" onclick="deleteImage('card-tab')">×</button>
+        </div>
+    </div>
+</div>
+
+<div id="sortable-grid" class="stamp-grid">
+    </div>
+
+<div class="footer-bar">
+    <button class="btn-zip" onclick="generateZip()">ZIPを生成して保存</button>
+</div>
+
+<input type="file" id="file-input-single" accept="image/png,image/jpeg" style="display:none">
+<input type="file" id="file-input-multi" accept="image/png,image/jpeg" multiple style="display:none">
+
+<script>
+    const grid = document.getElementById('sortable-grid');
+    const singleInput = document.getElementById('file-input-single');
+    const multiInput = document.getElementById('file-input-multi');
+    let currentSingleTargetId = null;
+
+    // 1. 初期化
+    for (let i = 1; i <= 40; i++) {
+        const id = String(i).padStart(3, '0');
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.id = `card-${id}`;
+        card.innerHTML = `
+            <span class="label">${id}</span>
+            <div class="preview-container"></div>
+            <div class="controls">
+                <button class="btn-upload" onclick="triggerSingleUpload('${id}')">UP</button>
+                <button class="btn-delete" onclick="deleteImage('card-${id}')">×</button>
+            </div>
+        `;
+        grid.appendChild(card);
+    }
+
+    // 2. 入れ替え設定
+    new Sortable(grid, {
+        swap: true,
+        swapClass: 'sortable-swap-highlight',
+        animation: 150,
+        delay: 250,
+        delayOnTouchOnly: true,
+        onEnd: () => reLabelCards()
+    });
+
+    function reLabelCards() {
+        grid.querySelectorAll('.item-card').forEach((card, index) => {
+            card.querySelector('.label').innerText = String(index + 1).padStart(3, '0');
+        });
+    }
+
+    // 単体アップロード
+    function triggerSingleUpload(id) {
+        currentSingleTargetId = id;
+        singleInput.click();
+    }
+
+    singleInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) renderToCard(file, `card-${currentSingleTargetId}`);
+        e.target.value = "";
+    };
+
+    // 一括アップロード
+    function triggerMultiUpload() {
+        multiInput.click();
+    }
+
+    multiInput.onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        const cards = Array.from(grid.querySelectorAll('.item-card'));
+        
+        for (let i = 0; i < files.length && i < cards.length; i++) {
+            await renderToCard(files[i], cards[i].id);
+        }
+        e.target.value = "";
+    };
+
+    function renderToCard(file, cardId) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const card = document.getElementById(cardId);
+                card.querySelector('.preview-container').innerHTML = `<img src="${e.target.result}">`;
+                card.classList.add('has-image');
+                resolve();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function deleteImage(cardId) {
+        const card = document.getElementById(cardId);
+        card.querySelector('.preview-container').innerHTML = "";
+        card.classList.remove('has-image');
+    }
+
+    async function generateZip() {
+        const zip = new JSZip();
+        await addToZip(zip, 'card-main', 240, 240, 'main.png');
+        await addToZip(zip, 'card-tab', 96, 74, 'tab.png');
+
+        const cards = grid.querySelectorAll('.item-card');
+        for (const card of cards) {
+            const label = card.querySelector('.label').innerText;
+            await addToZip(zip, card.id, 370, 320, `${label}.png`);
+        }
+
+        if (Object.keys(zip.files).length === 0) return alert("画像がありません");
+
+        const content = await zip.generateAsync({type: "blob"});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = "line_stamps.zip";
+        link.click();
+    }
+
+    async function addToZip(zip, elementId, w, h, fileName) {
+        const img = document.getElementById(elementId)?.querySelector('img');
+        if (!img) return;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        zip.file(fileName, blob);
+    }
+</script>
+
+</body>
+</html>
