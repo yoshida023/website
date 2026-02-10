@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>preBuild for hp2025 - LINE Stamp Editor</title>
+    <title>LINE Stamp Editor</title>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -15,7 +15,7 @@
             --multi: #6f42c1;
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body { 
             font-family: -apple-system, sans-serif; 
@@ -23,7 +23,6 @@
             margin: 0; 
             padding: 10px; 
             padding-bottom: 120px;
-            overflow-x: hidden;
         }
 
         h1 { font-size: 1rem; text-align: center; margin: 5px 0; color: #333; }
@@ -31,18 +30,18 @@
         .action-panel {
             display: flex;
             justify-content: center;
-            gap: 10px;
             margin-bottom: 15px;
         }
 
         .btn-multi {
             background: var(--multi);
             color: white;
-            padding: 10px 15px;
-            border-radius: 6px;
-            font-size: 13px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
             border: none;
             font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .header-container {
@@ -51,37 +50,40 @@
             gap: 10px;
             margin-bottom: 15px;
         }
-
         .header-container .item-card { width: 45%; }
 
         .stamp-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
+            gap: 8px;
             width: 100%;
         }
 
         .item-card {
             background: var(--card-bg);
-            border-radius: 6px;
-            padding: 4px;
+            border-radius: 8px;
+            padding: 5px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             text-align: center;
-            border: 1.5px solid transparent;
-            touch-action: none;
+            border: 2px solid transparent;
             position: relative;
         }
         
         .item-card.has-image { border-color: var(--accent); }
 
-        .label { 
+        /* ハンドル部分（ここを掴まないと動かないようにしてスクロールを優先） */
+        .drag-handle { 
             display: block; 
             font-size: 11px; 
             font-weight: bold; 
-            color: #555; 
-            margin-bottom: 2px;
-            pointer-events: none;
+            color: #fff;
+            background: #999;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            padding: 2px 0;
+            cursor: grab;
         }
+        .has-image .drag-handle { background: var(--accent); }
 
         .preview-container {
             width: 100%;
@@ -89,23 +91,21 @@
             background-color: #fff;
             background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), 
                               linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee);
-            background-size: 8px 8px;
-            background-position: 0 0, 4px 4px;
+            background-size: 10px 10px;
+            background-position: 0 0, 5px 5px;
             border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             overflow: hidden;
             border: 1px solid #ddd;
-            pointer-events: none;
         }
 
         img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-        .controls { display: flex; gap: 2px; }
-
-        button {
+        .controls { display: flex; gap: 4px; }
+        button.small-btn {
             border: none;
             border-radius: 4px;
             padding: 8px 0;
@@ -113,16 +113,15 @@
             flex: 1;
             font-weight: bold;
         }
-
-        .btn-upload { background: var(--accent); color: white; }
-        .btn-delete { background: #eee; color: #666; }
+        .btn-upload { background: #e3f2fd; color: var(--accent); }
+        .btn-delete { background: #fee; color: #e57373; }
 
         .footer-bar {
             position: fixed;
             bottom: 0; left: 0; right: 0;
             background: rgba(255,255,255,0.95);
             padding: 15px;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
             display: flex;
             justify-content: center;
             z-index: 1000;
@@ -131,43 +130,43 @@
         .btn-zip {
             background: var(--primary);
             color: white;
-            padding: 12px 0;
+            padding: 14px 0;
             font-size: 16px;
-            border-radius: 8px;
+            border-radius: 10px;
             width: 90%;
             border: none;
             font-weight: bold;
         }
 
         .sortable-swap-highlight {
-            background-color: rgba(0, 122, 255, 0.2) !important;
-            border: 1.5px solid var(--accent) !important;
+            background-color: rgba(0, 122, 255, 0.1) !important;
+            border: 2px dashed var(--accent) !important;
         }
     </style>
 </head>
 <body>
 
-<h1>preBuild for hp2025</h1>
+<h1>LINEスタンプ配置エディタv1.00</h1>
 
 <div class="action-panel">
-    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (01~)</button>
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード (main/tab対応)</button>
 </div>
 
 <div class="header-container">
     <div class="item-card" id="card-main">
-        <span class="label">main</span>
+        <span class="label" style="font-size:10px; color:#666; font-weight:bold;">main</span>
         <div class="preview-container"></div>
         <div class="controls">
-            <button class="btn-upload" onclick="triggerSingleUpload('main')">UP</button>
-            <button class="btn-delete" onclick="deleteImage('card-main')">×</button>
+            <button class="small-btn btn-upload" onclick="triggerSingleUpload('main')">UP</button>
+            <button class="small-btn btn-delete" onclick="deleteImage('card-main')">×</button>
         </div>
     </div>
     <div class="item-card" id="card-tab">
-        <span class="label">tab</span>
+        <span class="label" style="font-size:10px; color:#666; font-weight:bold;">tab</span>
         <div class="preview-container"></div>
         <div class="controls">
-            <button class="btn-upload" onclick="triggerSingleUpload('tab')">UP</button>
-            <button class="btn-delete" onclick="deleteImage('card-tab')">×</button>
+            <button class="small-btn btn-upload" onclick="triggerSingleUpload('tab')">UP</button>
+            <button class="small-btn btn-delete" onclick="deleteImage('card-tab')">×</button>
         </div>
     </div>
 </div>
@@ -176,7 +175,7 @@
     </div>
 
 <div class="footer-bar">
-    <button class="btn-zip" onclick="generateZip()">ZIPを生成 (01.png~)</button>
+    <button class="btn-zip" onclick="generateZip()">ZIPを生成して保存</button>
 </div>
 
 <input type="file" id="file-input-single" accept="image/png,image/jpeg" style="display:none">
@@ -188,37 +187,35 @@
     const multiInput = document.getElementById('file-input-multi');
     let currentSingleTargetId = null;
 
-    // 1. 初期化 (01〜40)
+    // 1. スタンプ枠初期化
     for (let i = 1; i <= 40; i++) {
         const id = String(i).padStart(2, '0');
         const card = document.createElement('div');
         card.className = 'item-card';
         card.id = `card-${id}`;
         card.innerHTML = `
-            <span class="label">${id}</span>
+            <span class="drag-handle">${id}</span>
             <div class="preview-container"></div>
             <div class="controls">
-                <button class="btn-upload" onclick="triggerSingleUpload('${id}')">UP</button>
-                <button class="btn-delete" onclick="deleteImage('card-${id}')">×</button>
+                <button class="small-btn btn-upload" onclick="triggerSingleUpload('${id}')">UP</button>
+                <button class="small-btn btn-delete" onclick="deleteImage('card-${id}')">×</button>
             </div>
         `;
         grid.appendChild(card);
     }
 
-    // 2. 並び替え設定
+    // 2. 並び替え設定 (handleを追加してスクロールを邪魔しないように)
     new Sortable(grid, {
         swap: true,
         swapClass: 'sortable-swap-highlight',
+        handle: '.drag-handle', // 数字ラベル部分のみドラッグ可能
         animation: 150,
-        delay: 250,
-        delayOnTouchOnly: true,
         onEnd: () => reLabelCards()
     });
 
     function reLabelCards() {
         grid.querySelectorAll('.item-card').forEach((card, index) => {
-            // ラベルを2桁（01, 02...）に更新
-            card.querySelector('.label').innerText = String(index + 1).padStart(2, '0');
+            card.querySelector('.drag-handle').innerText = String(index + 1).padStart(2, '0');
         });
     }
 
@@ -239,10 +236,21 @@
 
     multiInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
-        const cards = Array.from(grid.querySelectorAll('.item-card'));
-        
-        for (let i = 0; i < files.length && i < cards.length; i++) {
-            await renderToCard(files[i], cards[i].id);
+        const stampCards = Array.from(grid.querySelectorAll('.item-card'));
+        let stampIdx = 0;
+
+        for (const file of files) {
+            const name = file.name.toLowerCase();
+            if (name.includes('main')) {
+                await renderToCard(file, 'card-main');
+            } else if (name.includes('tab')) {
+                await renderToCard(file, 'card-tab');
+            } else {
+                if (stampIdx < stampCards.length) {
+                    await renderToCard(file, stampCards[stampIdx].id);
+                    stampIdx++;
+                }
+            }
         }
         e.target.value = "";
     };
@@ -252,8 +260,10 @@
             const reader = new FileReader();
             reader.onload = (e) => {
                 const card = document.getElementById(cardId);
-                card.querySelector('.preview-container').innerHTML = `<img src="${e.target.result}">`;
-                card.classList.add('has-image');
+                if(card) {
+                    card.querySelector('.preview-container').innerHTML = `<img src="${e.target.result}">`;
+                    card.classList.add('has-image');
+                }
                 resolve();
             };
             reader.readAsDataURL(file);
@@ -268,15 +278,12 @@
 
     async function generateZip() {
         const zip = new JSZip();
-        
-        // main / tab
         await addToZip(zip, 'card-main', 240, 240, 'main.png');
         await addToZip(zip, 'card-tab', 96, 74, 'tab.png');
 
-        // 01.png ~ 40.png
         const cards = grid.querySelectorAll('.item-card');
         for (const card of cards) {
-            const label = card.querySelector('.label').innerText;
+            const label = card.querySelector('.drag-handle').innerText;
             await addToZip(zip, card.id, 370, 320, `${label}.png`);
         }
 
@@ -292,11 +299,9 @@
     async function addToZip(zip, elementId, w, h, fileName) {
         const img = document.getElementById(elementId)?.querySelector('img');
         if (!img) return;
-
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         zip.file(fileName, blob);
     }
