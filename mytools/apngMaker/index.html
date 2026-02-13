@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - Flexible</title>
+    <title>preBuild for hp2025 - 0.2s Fixed</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
@@ -41,7 +41,7 @@
 <body>
 
     <div class="header-ui">
-        <h1>preBuild for hp2025</h1>
+        <h1>preBuild for hp2025 (0.2s Fixed)</h1>
         <div id="preview-area" onclick="togglePreview()">
             <canvas id="main-canvas" width="320" height="270"></canvas>
             <div id="play-state-label" style="position:absolute; bottom:5px; background:rgba(0,0,0,0.5); color:white; padding:2px 8px; border-radius:10px; font-size:10px;">再生中</div>
@@ -55,20 +55,21 @@
             <button class="btn-save-db" onclick="restoreFromDB()">復元</button>
             <button class="btn-red" onclick="saveForLine()">APNG保存</button>
         </div>
-        <div id="status-info" style="font-size: 11px; color: #666;">5〜20枚で出力可能</div>
+        <div id="status-info" style="font-size: 11px; color: #666;">
+            1枚 0.2秒固定 | 推奨枚数: 5, 10, 15, 20枚
+        </div>
     </div>
 
     <div id="frames-list"></div>
 
 <script>
-    const MAX_FRAMES = 20, WIDTH = 320, HEIGHT = 270;
+    const MAX_FRAMES = 20, WIDTH = 320, HEIGHT = 270, FIXED_DELAY = 200; // 0.2s固定
     let frameBuffers = new Array(MAX_FRAMES).fill(null);
     let isPlaying = true;
     let previewTimer = null;
     let currentPreviewIdx = 0;
     const mainCtx = document.getElementById('main-canvas').getContext('2d');
 
-    // IndexedDB
     const DB_NAME = "hp2025_DB_v2", STORE_NAME = "frames";
     function openDB() {
         return new Promise(resolve => {
@@ -103,7 +104,7 @@
             const thumbSrc = buf ? arrayBufferToDataURL(buf) : '';
             div.innerHTML = `
                 <span class="frame-info">${i+1}</span>
-                <img src="${thumbSrc}" class="thumb" id="img-${i}" style="${!buf ? 'opacity:0.3' : ''}">
+                <img src="${thumbSrc}" class="thumb" id="img-${i}" style="${!buf ? 'opacity:0.1' : ''}">
                 <input type="file" accept="image/*" onchange="loadSingle(${i}, this)" style="width:120px; font-size:10px;">
                 <div class="item-ctrls">
                     <button class="btn-mini" onclick="moveFrame(${i}, -1)">▲</button>
@@ -178,7 +179,6 @@
         saveToDB();
     }
 
-    // --- プレビュー制御 ---
     function togglePreview() {
         isPlaying = !isPlaying;
         document.getElementById('btn-play-pause').innerText = isPlaying ? "一時停止" : "再生";
@@ -202,7 +202,7 @@
                 const idata = new ImageData(new Uint8ClampedArray(buf), WIDTH, HEIGHT);
                 mainCtx.putImageData(idata, 0, 0);
             }
-        }, 150); // 少し速めにプレビュー
+        }, FIXED_DELAY); 
     }
 
     function arrayBufferToDataURL(buf) {
@@ -217,18 +217,17 @@
         const count = active.length;
         if (count < 5) return alert("LINEスタンプは最低5フレーム必要です。");
 
-        // 合計4秒以内に収めるためのディレイ計算 (100ms単位)
-        // 例: 20枚なら200ms(4.0s)、10枚なら400ms(4.0s)
-        let delay = Math.floor(4000 / count);
-        if (delay < 100) delay = 100; // 最速0.1s
+        const totalTime = (count * FIXED_DELAY) / 1000;
+        if (totalTime % 1 !== 0) {
+            if (!confirm(`現在の合計時間は ${totalTime}秒 です。LINE公式ルールでは整数（1, 2, 3, 4秒）が推奨されますが、このまま出力しますか？\n（推奨枚数: 5, 10, 15, 20枚）`)) return;
+        }
 
-        const apng = UPNG.encode(active, WIDTH, HEIGHT, 0, new Array(count).fill(delay));
+        const apng = UPNG.encode(active, WIDTH, HEIGHT, 0, new Array(count).fill(FIXED_DELAY));
         const view = new DataView(apng);
         let offset = 8;
         while (offset < apng.byteLength) {
             const len = view.getUint32(offset), type = view.getUint32(offset + 4);
             if (type === 0x6163544C) { 
-                // ループ回数設定: 合計4秒になるように。1回再生が最も安全
                 view.setUint32(offset + 12, 1); 
                 break; 
             }
@@ -236,7 +235,7 @@
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([apng], {type: 'image/png'}));
-        a.download = `line_${count}frames.png`;
+        a.download = `line_${count}f_${totalTime}s.png`;
         a.click();
     }
 
