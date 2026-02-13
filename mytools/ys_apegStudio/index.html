@@ -34,6 +34,7 @@
         .btn-blue { background: var(--primary); color: white; }
         .btn-green { background: #00897b; color: white; }
         .btn-red { background: var(--accent); color: white; }
+        .btn-orange { background: #FF9800; color: white; }
         .btn-gray { background: #444; color: white; }
 
         .main-frame-section { background: #252525; padding: 12px; margin: 15px 0; border-radius: 12px; border: 1px solid var(--primary); }
@@ -92,6 +93,7 @@
         <div class="btn-group">
             <button class="btn-blue" onclick="document.getElementById('bulk-upload').click()">一括読込</button>
             <button class="btn-green" onclick="smartFill()">パターン自動充填</button>
+            <button class="btn-orange" onclick="exportSingleAPNG()">このスタンプをAPNG保存</button>
             <input type="file" id="bulk-upload" multiple accept="image/*" style="display:none" onchange="handleBulkUpload(this)">
         </div>
     </div>
@@ -104,7 +106,7 @@
     let project = {
         name: "my_stamp_project",
         size: 24,
-        stamps: {} // { "01": { delay: 200, buffers: [] } }
+        stamps: {} 
     };
     let currentStampId = "01";
     let isPlaying = false;
@@ -247,14 +249,30 @@
         }
     }
 
-    // --- 保存・書き出し ---
+    // --- 保存・書き出し (個別) ---
+    function exportSingleAPNG() {
+        const sData = project.stamps[currentStampId];
+        const active = sData.buffers.filter(b => b !== null);
+        if (active.length < 5) return alert("最低5フレーム必要です。");
+        
+        const apng = UPNG.encode(active, 320, 270, 0, new Array(active.length).fill(sData.delay));
+        const view = new DataView(apng);
+        let offset = 8;
+        while (offset < apng.byteLength) {
+            const len = view.getUint32(offset), type = view.getUint32(offset + 4);
+            if (type === 0x6163544C) { view.setUint32(offset + 12, 1); break; }
+            offset += 12 + len;
+        }
+        saveAs(new Blob([apng], {type: 'image/png'}), `${currentStampId}.png`);
+    }
+
+    // --- 保存・書き出し (一括/プロジェクト) ---
     async function exportProjectZip() {
         const zip = new JSZip();
         project.name = document.getElementById('project-name').value;
         const root = zip.folder(project.name);
         for (let id in project.stamps) {
             const folder = root.folder(id);
-            // 速度設定をテキストで保存
             folder.file("config.txt", `delay:${project.stamps[id].delay}`);
             project.stamps[id].buffers.forEach((buf, i) => {
                 if (buf) folder.file(`${String(i+1).padStart(2,'0')}.png`, buf);
@@ -291,9 +309,10 @@
         const zip = new JSZip();
         const pName = document.getElementById('project-name').value;
         for (let id in project.stamps) {
-            const active = project.stamps[id].buffers.filter(b => b !== null);
+            const sData = project.stamps[id];
+            const active = sData.buffers.filter(b => b !== null);
             if (active.length < 5) continue;
-            const apng = UPNG.encode(active, 320, 270, 0, new Array(active.length).fill(project.stamps[id].delay));
+            const apng = UPNG.encode(active, 320, 270, 0, new Array(active.length).fill(sData.delay));
             const view = new DataView(apng);
             let offset = 8;
             while (offset < apng.byteLength) {
@@ -346,7 +365,7 @@
     function moveFrame(i, dir) {
         const bufs = project.stamps[currentStampId].buffers;
         const target = i + dir;
-        if (target < 1 || target >= 20) return; // 1枚目は固定
+        if (target < 1 || target >= 20) return; 
         [bufs[i], bufs[target]] = [bufs[target], bufs[i]];
         renderEditorLists();
     }
