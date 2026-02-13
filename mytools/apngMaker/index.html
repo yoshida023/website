@@ -1,116 +1,9 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - LINE 4s Fix</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
-    <style>
-        body { font-family: sans-serif; background: #eef2f3; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        h1 { font-size: 1rem; color: #444; }
-        #preview-container {
-            width: 320px; height: 270px; background-color: #eee;
-            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
-            background-size: 20px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            display: flex; align-items: center; justify-content: center; position: sticky; top: 0; z-index: 100;
-        }
-        #preview-canvas { max-width: 100%; max-height: 100%; }
-        .controls { width: 100%; max-width: 320px; margin: 15px 0; display: flex; flex-direction: column; gap: 8px; }
-        button { padding: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
-        .btn-fill { background: #009688; }
-        .btn-generate { background: #d32f2f; font-size: 1.1rem; }
-        #frames-list { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 8px; }
-        .frame-item { background: white; padding: 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; border: 1px solid #ddd; }
-        .frame-thumb { width: 50px; height: 50px; background: #eee; object-fit: contain; }
-    </style>
-</head>
-<body>
-
-    <h1>preBuild for hp2025 - 4秒制限対応</h1>
-
-    <div id="preview-container" onclick="togglePreview()">
-        <canvas id="preview-canvas" width="320" height="270"></canvas>
-    </div>
-
-    <div class="controls">
-        <button class="btn-fill" onclick="autoFillFrames()">2枚目・3枚目をコピー(計20枚)</button>
-        <button class="btn-generate" onclick="generateLineAPNG()">LINEスタンプを生成</button>
-    </div>
-
-    <div id="frames-list"></div>
-
-<script>
-    const MAX_FRAMES = 20, WIDTH = 320, HEIGHT = 270;
-    const frameBuffers = new Array(MAX_FRAMES).fill(null);
-    const frameImages = new Array(MAX_FRAMES).fill(null);
-    let isPlaying = false, currentFrameIdx = 0, timer = null;
-    const mainCtx = document.getElementById('preview-canvas').getContext('2d');
-
-    const listContainer = document.getElementById('frames-list');
-    for (let i = 0; i < MAX_FRAMES; i++) {
-        const div = document.createElement('div');
-        div.className = 'frame-item';
-        div.innerHTML = `<span style="font-size:10px">${i+1}</span><img id="thumb-${i}" class="frame-thumb"><input type="file" accept="image/*" onchange="loadFrame(${i}, this)">`;
-        listContainer.appendChild(div);
-    }
-
-    function loadFrame(index, input) {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = WIDTH; canvas.height = HEIGHT;
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, WIDTH, HEIGHT);
-                const pad = 20;
-                const scale = Math.min((WIDTH - pad) / img.width, (HEIGHT - pad) / img.height);
-                const x = (WIDTH - img.width * scale) / 2, y = (HEIGHT - img.height * scale) / 2;
-                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-                
-                frameImages[index] = canvas;
-                frameBuffers[index] = ctx.getImageData(0, 0, WIDTH, HEIGHT).data.buffer;
-                document.getElementById(`thumb-${index}`).src = canvas.toDataURL();
-                if (!isPlaying) { mainCtx.clearRect(0,0,WIDTH,HEIGHT); mainCtx.drawImage(canvas,0,0); }
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function togglePreview() {
-        if (frameImages.filter(i => i).length === 0) return;
-        isPlaying = !isPlaying;
-        if (isPlaying) playLoop(); else clearTimeout(timer);
-    }
-
-    function playLoop() {
-        if (!isPlaying) return;
-        do { currentFrameIdx = (currentFrameIdx + 1) % MAX_FRAMES; } while (!frameImages[currentFrameIdx]);
-        mainCtx.clearRect(0,0,WIDTH,HEIGHT);
-        mainCtx.drawImage(frameImages[currentFrameIdx], 0, 0);
-        timer = setTimeout(playLoop, 100);
-    }
-
-    function autoFillFrames() {
-        if (!frameBuffers[0] || !frameBuffers[1] || !frameBuffers[2]) return alert("3枚目まで設定してください");
-        for (let i = 3; i < MAX_FRAMES; i++) {
-            const srcIdx = (i % 2 === 1) ? 1 : 2;
-            frameBuffers[i] = frameBuffers[srcIdx];
-            frameImages[i] = frameImages[srcIdx];
-            document.getElementById(`thumb-${i}`).src = document.getElementById(`thumb-${srcIdx}`).src;
-        }
-    }
-
-    function generateLineAPNG() {
+function generateLineAPNG() {
         const activeFrames = frameBuffers.filter(b => b !== null);
         if (activeFrames.length < 3) return alert("枚数が足りません");
 
-        // フレームごとに0.1秒(100ms)
         const delays = new Array(activeFrames.length).fill(100);
+        // UPNGで生成
         const apngBuffer = UPNG.encode(activeFrames, WIDTH, HEIGHT, 256, delays);
         const view = new DataView(apngBuffer);
         
@@ -129,29 +22,34 @@
         result.push(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer);
         result.push(chunks.find(c => c.name === 'IHDR').data);
         
-        // --- ループ回数の計算 ---
-        // 20枚×0.1s = 2.0s。4秒以内に収めるため、ループ回数は「2」回に設定します。
-        const loopCount = 2; 
+        // 1. acTL (2.0s × 2回 ＝ 4.0s)
         const actlChunk = chunks.find(c => c.name === 'acTL').data;
-        new DataView(actlChunk).setUint32(12, loopCount); 
+        new DataView(actlChunk).setUint32(12, 2); 
         result.push(actlChunk);
 
-        // fcTL, IDAT, fdAT を順番通りに結合
-        const animChunks = chunks.filter(c => ['fcTL', 'IDAT', 'fdAT'].includes(c.name));
-        animChunks.forEach(c => result.push(c.data));
+        // 2. フレームデータの並べ替え
+        // UPNGが出力する fcTL は IDAT の前後に正しく配置されている必要があります
+        // LINE用には [fcTL][IDAT], [fcTL][fdAT], [fcTL][fdAT]... の順序を徹底
+        const fctls = chunks.filter(c => c.name === 'fcTL');
+        const idat = chunks.find(c => c.name === 'IDAT');
+        const fdats = chunks.filter(c => c.name === 'fdAT');
+
+        // 1フレーム目
+        if (fctls[0]) result.push(fctls[0].data);
+        result.push(idat.data);
+
+        // 2フレーム目以降
+        for (let i = 0; i < fdats.length; i++) {
+            if (fctls[i + 1]) result.push(fctls[i + 1].data);
+            result.push(fdats[i].data);
+        }
 
         result.push(chunks.find(c => c.name === 'IEND').data);
 
         const finalBlob = new Blob(result, { type: 'image/png' });
         const url = URL.createObjectURL(finalBlob);
-        
         const link = document.createElement('a');
         link.href = url;
-        link.download = `line_2loop_4s.png`;
+        link.download = `line_animated_${Date.now()}.png`;
         link.click();
-
-        alert("2.0秒×2ループ＝4.0秒の設定で生成しました。");
     }
-</script>
-</body>
-</html>
