@@ -2,21 +2,20 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - Professional</title>
+    <title>preBuild for hp2025 - Flexible</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
         :root { --primary: #2196F3; --accent: #d32f2f; --bg: #eef2f3; }
         body { font-family: sans-serif; background: var(--bg); text-align: center; padding: 20px; color: #333; margin: 0; }
         
-        /* プレビュー固定エリア */
-        .header-ui { position: sticky; top: 0; background: var(--bg); padding: 10px; z-index: 100; border-bottom: 2px solid #ccc; }
+        .header-ui { position: sticky; top: 0; background: var(--bg); padding: 10px; z-index: 100; border-bottom: 2px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         #preview-area { 
             width: 320px; height: 270px; margin: 10px auto; 
             background-color: #eee; border: 2px solid #ccc; border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
             background-image: linear-gradient(45deg, #ddd 25%, transparent 25%), linear-gradient(-45deg, #ddd 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ddd 75%), linear-gradient(-45deg, transparent 75%, #ddd 75%);
-            background-size: 20px 20px; position: relative;
+            background-size: 20px 20px; position: relative; cursor: pointer;
         }
         canvas { max-width: 100%; max-height: 100%; }
 
@@ -25,36 +24,38 @@
         .btn-blue { background: var(--primary); }
         .btn-green { background: #009688; }
         .btn-red { background: var(--accent); box-shadow: 0 4px #b71c1c; }
+        .btn-toggle { background: #673ab7; }
         .btn-save-db { background: #607D8B; }
         button:hover { opacity: 0.8; }
         button:active { transform: translateY(2px); box-shadow: none; }
 
-        /* フレームリスト */
-        #frames-list { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 20px; }
-        .frame-item { background: white; padding: 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; width: 450px; border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        #frames-list { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 20px; padding-bottom: 50px; }
+        .frame-item { background: white; padding: 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; width: 450px; border: 1px solid #ddd; }
         .thumb { width: 40px; height: 40px; object-fit: contain; background: #f9f9f9; border: 1px solid #eee; }
-        .frame-info { font-weight: bold; width: 20px; font-size: 12px; }
+        .frame-info { font-weight: bold; width: 25px; font-size: 12px; color: #888; }
         .item-ctrls { display: flex; gap: 4px; margin-left: auto; }
-        .btn-mini { padding: 4px 8px; font-size: 10px; background: #9e9e9e; }
+        .btn-mini { padding: 4px 8px; font-size: 10px; background: #9e9e9e; color: white; border: none; border-radius: 4px; }
         .btn-del { background: #ff5252; }
     </style>
 </head>
 <body>
 
     <div class="header-ui">
-        <h1>preBuild for hp2025 Pro</h1>
-        <div id="preview-area">
+        <h1>preBuild for hp2025</h1>
+        <div id="preview-area" onclick="togglePreview()">
             <canvas id="main-canvas" width="320" height="270"></canvas>
-            <div id="play-state" style="position:absolute; top:5px; right:5px; font-size:10px; color:#666;">Preview: ON</div>
+            <div id="play-state-label" style="position:absolute; bottom:5px; background:rgba(0,0,0,0.5); color:white; padding:2px 8px; border-radius:10px; font-size:10px;">再生中</div>
         </div>
 
         <div class="main-controls">
+            <button class="btn-toggle" id="btn-play-pause" onclick="togglePreview()">一時停止</button>
             <button class="btn-blue" onclick="document.getElementById('bulk-upload').click()">一括アップロード</button>
             <input type="file" id="bulk-upload" multiple accept="image/*" style="display:none" onchange="handleBulkUpload(this)">
-            <button class="btn-green" onclick="autoFill()">2・3枚目を自動充填</button>
-            <button class="btn-save-db" onclick="restoreFromDB()">一時保存から復元</button>
-            <button class="btn-red" onclick="saveForLine()">LINE用APNG出力</button>
+            <button class="btn-green" onclick="autoFill()">2・3枚目をコピー</button>
+            <button class="btn-save-db" onclick="restoreFromDB()">復元</button>
+            <button class="btn-red" onclick="saveForLine()">APNG保存</button>
         </div>
+        <div id="status-info" style="font-size: 11px; color: #666;">5〜20枚で出力可能</div>
     </div>
 
     <div id="frames-list"></div>
@@ -62,12 +63,13 @@
 <script>
     const MAX_FRAMES = 20, WIDTH = 320, HEIGHT = 270;
     let frameBuffers = new Array(MAX_FRAMES).fill(null);
+    let isPlaying = true;
     let previewTimer = null;
     let currentPreviewIdx = 0;
     const mainCtx = document.getElementById('main-canvas').getContext('2d');
 
-    // --- DB機能 (IndexedDB) ---
-    const DB_NAME = "hp2025_DB", STORE_NAME = "frames";
+    // IndexedDB
+    const DB_NAME = "hp2025_DB_v2", STORE_NAME = "frames";
     function openDB() {
         return new Promise(resolve => {
             const req = indexedDB.open(DB_NAME, 1);
@@ -78,7 +80,7 @@
     async function saveToDB() {
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, "readwrite");
-        await tx.objectStore(STORE_NAME).put(frameBuffers, "current_project");
+        tx.objectStore(STORE_NAME).put(frameBuffers, "current_project");
     }
     async function restoreFromDB() {
         const db = await openDB();
@@ -87,12 +89,11 @@
             if (req.result) {
                 frameBuffers = req.result;
                 renderList();
-                alert("復元しました。");
+                alert("データを復元しました。");
             }
         };
     }
 
-    // --- フレーム管理 ---
     function renderList() {
         const list = document.getElementById('frames-list');
         list.innerHTML = '';
@@ -102,7 +103,7 @@
             const thumbSrc = buf ? arrayBufferToDataURL(buf) : '';
             div.innerHTML = `
                 <span class="frame-info">${i+1}</span>
-                <img src="${thumbSrc}" class="thumb" id="img-${i}">
+                <img src="${thumbSrc}" class="thumb" id="img-${i}" style="${!buf ? 'opacity:0.3' : ''}">
                 <input type="file" accept="image/*" onchange="loadSingle(${i}, this)" style="width:120px; font-size:10px;">
                 <div class="item-ctrls">
                     <button class="btn-mini" onclick="moveFrame(${i}, -1)">▲</button>
@@ -124,11 +125,11 @@
 
     async function handleBulkUpload(input) {
         const files = Array.from(input.files);
-        let fileIdx = 0;
-        for (let i = 0; i < MAX_FRAMES && fileIdx < files.length; i++) {
+        let fIdx = 0;
+        for (let i = 0; i < MAX_FRAMES && fIdx < files.length; i++) {
             if (!frameBuffers[i]) {
-                frameBuffers[i] = await processImage(files[fileIdx]);
-                fileIdx++;
+                frameBuffers[i] = await processImage(files[fIdx]);
+                fIdx++;
             }
         }
         renderList();
@@ -169,7 +170,7 @@
     }
 
     function autoFill() {
-        if (!frameBuffers[0] || !frameBuffers[1] || !frameBuffers[2]) return alert("3枚目まで必要です");
+        if (!frameBuffers[1] || !frameBuffers[2]) return alert("2枚目と3枚目を設定してください");
         for (let i = 3; i < MAX_FRAMES; i++) {
             frameBuffers[i] = (i % 2 === 1) ? frameBuffers[1] : frameBuffers[2];
         }
@@ -177,48 +178,68 @@
         saveToDB();
     }
 
-    // --- プレビュー/生成 ---
+    // --- プレビュー制御 ---
+    function togglePreview() {
+        isPlaying = !isPlaying;
+        document.getElementById('btn-play-pause').innerText = isPlaying ? "一時停止" : "再生";
+        document.getElementById('play-state-label').innerText = isPlaying ? "再生中" : "停止中";
+        if (isPlaying) startPreview();
+        else if (previewTimer) clearInterval(previewTimer);
+    }
+
     function startPreview() {
         if (previewTimer) clearInterval(previewTimer);
         previewTimer = setInterval(() => {
-            const activeIndices = frameBuffers.map((b, i) => b ? i : null).filter(i => i !== null);
+            if (!isPlaying) return;
+            const activeIndices = frameBuffers.map((b, i) => b ? i : null).filter(v => v !== null);
             if (activeIndices.length === 0) return;
             
-            currentPreviewIdx = activeIndices[(activeIndices.indexOf(currentPreviewIdx) + 1) % activeIndices.length] || activeIndices[0];
+            currentPreviewIdx = activeIndices[(activeIndices.indexOf(currentPreviewIdx) + 1) % activeIndices.length];
+            if (currentPreviewIdx === undefined) currentPreviewIdx = activeIndices[0];
+            
             const buf = frameBuffers[currentPreviewIdx];
             if (buf) {
                 const idata = new ImageData(new Uint8ClampedArray(buf), WIDTH, HEIGHT);
                 mainCtx.putImageData(idata, 0, 0);
             }
-        }, 200);
+        }, 150); // 少し速めにプレビュー
     }
 
     function arrayBufferToDataURL(buf) {
         const cvs = document.createElement('canvas');
         cvs.width = WIDTH; cvs.height = HEIGHT;
-        const idata = new ImageData(new Uint8ClampedArray(buf), WIDTH, HEIGHT);
-        cvs.getContext('2d').putImageData(idata, 0, 0);
+        cvs.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(buf), WIDTH, HEIGHT), 0, 0);
         return cvs.toDataURL();
     }
 
     function saveForLine() {
         const active = frameBuffers.filter(b => b !== null);
-        if (active.length !== 20) return alert("20枚必要です");
-        const apng = UPNG.encode(active, WIDTH, HEIGHT, 0, new Array(active.length).fill(200));
+        const count = active.length;
+        if (count < 5) return alert("LINEスタンプは最低5フレーム必要です。");
+
+        // 合計4秒以内に収めるためのディレイ計算 (100ms単位)
+        // 例: 20枚なら200ms(4.0s)、10枚なら400ms(4.0s)
+        let delay = Math.floor(4000 / count);
+        if (delay < 100) delay = 100; // 最速0.1s
+
+        const apng = UPNG.encode(active, WIDTH, HEIGHT, 0, new Array(count).fill(delay));
         const view = new DataView(apng);
         let offset = 8;
         while (offset < apng.byteLength) {
             const len = view.getUint32(offset), type = view.getUint32(offset + 4);
-            if (type === 0x6163544C) { view.setUint32(offset + 12, 1); break; }
+            if (type === 0x6163544C) { 
+                // ループ回数設定: 合計4秒になるように。1回再生が最も安全
+                view.setUint32(offset + 12, 1); 
+                break; 
+            }
             offset += 12 + len;
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([apng], {type: 'image/png'}));
-        a.download = `line_stamp_pro.png`;
+        a.download = `line_${count}frames.png`;
         a.click();
     }
 
-    // 初期化
     renderList();
     startPreview();
 </script>
