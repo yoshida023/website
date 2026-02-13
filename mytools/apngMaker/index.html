@@ -2,110 +2,225 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - LINE Stable</title>
+    <title>preBuild for hp2025 - Professional</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #eef2f3; text-align: center; padding: 20px; }
-        #preview-area { width: 320px; height: 270px; margin: 0 auto 20px; background: #eee; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; background-image: linear-gradient(45deg, #ddd 25%, transparent 25%), linear-gradient(-45deg, #ddd 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ddd 75%), linear-gradient(-45deg, transparent 75%, #ddd 75%); background-size: 20px 20px; }
+        :root { --primary: #2196F3; --accent: #d32f2f; --bg: #eef2f3; }
+        body { font-family: sans-serif; background: var(--bg); text-align: center; padding: 20px; color: #333; margin: 0; }
+        
+        /* プレビュー固定エリア */
+        .header-ui { position: sticky; top: 0; background: var(--bg); padding: 10px; z-index: 100; border-bottom: 2px solid #ccc; }
+        #preview-area { 
+            width: 320px; height: 270px; margin: 10px auto; 
+            background-color: #eee; border: 2px solid #ccc; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            background-image: linear-gradient(45deg, #ddd 25%, transparent 25%), linear-gradient(-45deg, #ddd 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ddd 75%), linear-gradient(-45deg, transparent 75%, #ddd 75%);
+            background-size: 20px 20px; position: relative;
+        }
         canvas { max-width: 100%; max-height: 100%; }
-        button { padding: 12px 24px; font-weight: bold; cursor: pointer; margin: 5px; border-radius: 8px; border: none; color: white; }
-        .btn-copy { background: #009688; }
-        .btn-save { background: #d32f2f; box-shadow: 0 4px #b71c1c; }
-        .btn-save:active { transform: translateY(2px); box-shadow: none; }
-        #frames-list { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .frame-item { background: white; padding: 8px; border-radius: 5px; display: flex; align-items: center; gap: 10px; width: 340px; border: 1px solid #ddd; font-size: 12px; }
+
+        .main-controls { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        button { padding: 10px 16px; font-weight: bold; cursor: pointer; border-radius: 6px; border: none; color: white; transition: 0.2s; font-size: 13px; }
+        .btn-blue { background: var(--primary); }
+        .btn-green { background: #009688; }
+        .btn-red { background: var(--accent); box-shadow: 0 4px #b71c1c; }
+        .btn-save-db { background: #607D8B; }
+        button:hover { opacity: 0.8; }
+        button:active { transform: translateY(2px); box-shadow: none; }
+
+        /* フレームリスト */
+        #frames-list { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 20px; }
+        .frame-item { background: white; padding: 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; width: 450px; border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .thumb { width: 40px; height: 40px; object-fit: contain; background: #f9f9f9; border: 1px solid #eee; }
+        .frame-info { font-weight: bold; width: 20px; font-size: 12px; }
+        .item-ctrls { display: flex; gap: 4px; margin-left: auto; }
+        .btn-mini { padding: 4px 8px; font-size: 10px; background: #9e9e9e; }
+        .btn-del { background: #ff5252; }
     </style>
 </head>
 <body>
 
-    <h1>preBuild for hp2025 - 最終安定版</h1>
+    <div class="header-ui">
+        <h1>preBuild for hp2025 Pro</h1>
+        <div id="preview-area">
+            <canvas id="main-canvas" width="320" height="270"></canvas>
+            <div id="play-state" style="position:absolute; top:5px; right:5px; font-size:10px; color:#666;">Preview: ON</div>
+        </div>
 
-    <div id="preview-area"><canvas id="main-canvas" width="320" height="270"></canvas></div>
-
-    <div class="controls">
-        <button class="btn-copy" onclick="autoFill()">2枚目・3枚目をコピー</button>
-        <button class="btn-save" onclick="saveForLine()">LINE用APNGを生成</button>
+        <div class="main-controls">
+            <button class="btn-blue" onclick="document.getElementById('bulk-upload').click()">一括アップロード</button>
+            <input type="file" id="bulk-upload" multiple accept="image/*" style="display:none" onchange="handleBulkUpload(this)">
+            <button class="btn-green" onclick="autoFill()">2・3枚目を自動充填</button>
+            <button class="btn-save-db" onclick="restoreFromDB()">一時保存から復元</button>
+            <button class="btn-red" onclick="saveForLine()">LINE用APNG出力</button>
+        </div>
     </div>
 
     <div id="frames-list"></div>
 
 <script>
-    const MAX = 20, W = 320, H = 270;
-    const buffers = new Array(MAX).fill(null);
-    const ctx = document.getElementById('main-canvas').getContext('2d');
+    const MAX_FRAMES = 20, WIDTH = 320, HEIGHT = 270;
+    let frameBuffers = new Array(MAX_FRAMES).fill(null);
+    let previewTimer = null;
+    let currentPreviewIdx = 0;
+    const mainCtx = document.getElementById('main-canvas').getContext('2d');
 
-    for (let i = 0; i < MAX; i++) {
-        const div = document.createElement('div');
-        div.className = 'frame-item';
-        div.innerHTML = `<span>${i+1}</span><img id="t-${i}" style="width:40px;height:40px;object-fit:contain;background:#f9f9f9"><input type="file" accept="image/*" onchange="load(${i}, this)">`;
-        document.getElementById('frames-list').appendChild(div);
+    // --- DB機能 (IndexedDB) ---
+    const DB_NAME = "hp2025_DB", STORE_NAME = "frames";
+    function openDB() {
+        return new Promise(resolve => {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = () => req.result.createObjectStore(STORE_NAME);
+            req.onsuccess = () => resolve(req.result);
+        });
+    }
+    async function saveToDB() {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        await tx.objectStore(STORE_NAME).put(frameBuffers, "current_project");
+    }
+    async function restoreFromDB() {
+        const db = await openDB();
+        const req = db.transaction(STORE_NAME).objectStore(STORE_NAME).get("current_project");
+        req.onsuccess = () => {
+            if (req.result) {
+                frameBuffers = req.result;
+                renderList();
+                alert("復元しました。");
+            }
+        };
     }
 
-    function load(i, input) {
+    // --- フレーム管理 ---
+    function renderList() {
+        const list = document.getElementById('frames-list');
+        list.innerHTML = '';
+        frameBuffers.forEach((buf, i) => {
+            const div = document.createElement('div');
+            div.className = 'frame-item';
+            const thumbSrc = buf ? arrayBufferToDataURL(buf) : '';
+            div.innerHTML = `
+                <span class="frame-info">${i+1}</span>
+                <img src="${thumbSrc}" class="thumb" id="img-${i}">
+                <input type="file" accept="image/*" onchange="loadSingle(${i}, this)" style="width:120px; font-size:10px;">
+                <div class="item-ctrls">
+                    <button class="btn-mini" onclick="moveFrame(${i}, -1)">▲</button>
+                    <button class="btn-mini" onclick="moveFrame(${i}, 1)">▼</button>
+                    <button class="btn-mini btn-del" onclick="deleteFrame(${i})">消</button>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    async function loadSingle(i, input) {
         const file = input.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const cvs = document.createElement('canvas');
-                cvs.width = W; cvs.height = H;
-                const c = cvs.getContext('2d');
-                c.clearRect(0,0,W,H);
-                const s = Math.min(300/img.width, 250/img.height); 
-                c.drawImage(img, (W-img.width*s)/2, (H-img.height*s)/2, img.width*s, img.height*s);
-                buffers[i] = c.getImageData(0,0,W,H).data.buffer;
-                document.getElementById(`t-${i}`).src = cvs.toDataURL();
-                ctx.clearRect(0,0,W,H); ctx.drawImage(cvs,0,0);
+        frameBuffers[i] = await processImage(file);
+        renderList();
+        saveToDB();
+    }
+
+    async function handleBulkUpload(input) {
+        const files = Array.from(input.files);
+        let fileIdx = 0;
+        for (let i = 0; i < MAX_FRAMES && fileIdx < files.length; i++) {
+            if (!frameBuffers[i]) {
+                frameBuffers[i] = await processImage(files[fileIdx]);
+                fileIdx++;
+            }
+        }
+        renderList();
+        saveToDB();
+    }
+
+    function processImage(file) {
+        return new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const cvs = document.createElement('canvas');
+                    cvs.width = WIDTH; cvs.height = HEIGHT;
+                    const c = cvs.getContext('2d');
+                    const s = Math.min(300/img.width, 250/img.height);
+                    c.drawImage(img, (WIDTH-img.width*s)/2, (HEIGHT-img.height*s)/2, img.width*s, img.height*s);
+                    resolve(c.getImageData(0,0,WIDTH,HEIGHT).data.buffer);
+                };
+                img.src = e.target.result;
             };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function deleteFrame(i) {
+        frameBuffers[i] = null;
+        renderList();
+        saveToDB();
+    }
+
+    function moveFrame(i, dir) {
+        const target = i + dir;
+        if (target < 0 || target >= MAX_FRAMES) return;
+        [frameBuffers[i], frameBuffers[target]] = [frameBuffers[target], frameBuffers[i]];
+        renderList();
+        saveToDB();
     }
 
     function autoFill() {
-        if (!buffers[0] || !buffers[1] || !buffers[2]) return alert("3枚目まで読み込んでください");
-        for (let i = 3; i < MAX; i++) {
-            const src = (i % 2 === 1) ? 1 : 2;
-            buffers[i] = buffers[src];
-            document.getElementById(`t-${i}`).src = document.getElementById(`t-${src}`).src;
+        if (!frameBuffers[0] || !frameBuffers[1] || !frameBuffers[2]) return alert("3枚目まで必要です");
+        for (let i = 3; i < MAX_FRAMES; i++) {
+            frameBuffers[i] = (i % 2 === 1) ? frameBuffers[1] : frameBuffers[2];
         }
+        renderList();
+        saveToDB();
+    }
+
+    // --- プレビュー/生成 ---
+    function startPreview() {
+        if (previewTimer) clearInterval(previewTimer);
+        previewTimer = setInterval(() => {
+            const activeIndices = frameBuffers.map((b, i) => b ? i : null).filter(i => i !== null);
+            if (activeIndices.length === 0) return;
+            
+            currentPreviewIdx = activeIndices[(activeIndices.indexOf(currentPreviewIdx) + 1) % activeIndices.length] || activeIndices[0];
+            const buf = frameBuffers[currentPreviewIdx];
+            if (buf) {
+                const idata = new ImageData(new Uint8ClampedArray(buf), WIDTH, HEIGHT);
+                mainCtx.putImageData(idata, 0, 0);
+            }
+        }, 200);
+    }
+
+    function arrayBufferToDataURL(buf) {
+        const cvs = document.createElement('canvas');
+        cvs.width = WIDTH; cvs.height = HEIGHT;
+        const idata = new ImageData(new Uint8ClampedArray(buf), WIDTH, HEIGHT);
+        cvs.getContext('2d').putImageData(idata, 0, 0);
+        return cvs.toDataURL();
     }
 
     function saveForLine() {
-        const active = buffers.filter(b => b !== null);
-        if (active.length !== 20) return alert("20枚すべて埋めてください");
-
-        // ロスレス(0)でエンコード。これで「真っ黒」を防ぎます。
-        const delays = new Array(active.length).fill(200); // 0.2s
-        const apng = UPNG.encode(active, W, H, 0, delays);
-        
-        // ループ回数(acTL)だけを書き換える
+        const active = frameBuffers.filter(b => b !== null);
+        if (active.length !== 20) return alert("20枚必要です");
+        const apng = UPNG.encode(active, WIDTH, HEIGHT, 0, new Array(active.length).fill(200));
         const view = new DataView(apng);
         let offset = 8;
         while (offset < apng.byteLength) {
-            const len = view.getUint32(offset);
-            const type = view.getUint32(offset + 4);
-            if (type === 0x6163544C) { // acTLチャンク
-                view.setUint32(offset + 12, 1); // ループ回数を1回に固定
-                break;
-            }
+            const len = view.getUint32(offset), type = view.getUint32(offset + 4);
+            if (type === 0x6163544C) { view.setUint32(offset + 12, 1); break; }
             offset += 12 + len;
         }
-
-        const blob = new Blob([apng], { type: 'image/png' });
-        
-        if (blob.size > 320 * 1024) {
-            alert("サイズオーバーです。画像の描き込みを減らしてください。");
-        }
-
-        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `line_fixed_stable.png`; a.click();
-        
-        alert("4.0秒(1ループ)・フルカラーで生成しました。\nアップロードして動きを確認してください！");
+        a.href = URL.createObjectURL(new Blob([apng], {type: 'image/png'}));
+        a.download = `line_stamp_pro.png`;
+        a.click();
     }
+
+    // 初期化
+    renderList();
+    startPreview();
 </script>
 </body>
 </html>
