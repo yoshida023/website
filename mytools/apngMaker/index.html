@@ -2,34 +2,29 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - Simple APNG</title>
+    <title>preBuild for hp2025 - LINE Final Hope</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f0f0; text-align: center; padding: 20px; }
-        #preview-area {
-            width: 320px; height: 270px; margin: 0 auto 20px;
-            background-image: linear-gradient(45deg, #ddd 25%, transparent 25%), linear-gradient(-45deg, #ddd 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ddd 75%), linear-gradient(-45deg, transparent 75%, #ddd 75%);
-            background-size: 20px 20px; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center;
-        }
+        body { font-family: sans-serif; background: #eef2f3; text-align: center; padding: 20px; }
+        #preview-area { width: 320px; height: 270px; margin: 0 auto 20px; background: #eee; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; }
         canvas { max-width: 100%; max-height: 100%; }
-        .controls { margin-bottom: 20px; }
-        button { padding: 10px 20px; font-weight: bold; cursor: pointer; margin: 5px; }
+        button { padding: 12px 24px; font-weight: bold; cursor: pointer; margin: 5px; border-radius: 8px; border: none; color: white; }
+        .btn-copy { background: #009688; }
+        .btn-save { background: #d32f2f; }
         #frames-list { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .frame-item { background: white; padding: 8px; border-radius: 5px; display: flex; align-items: center; gap: 10px; width: 320px; border: 1px solid #ddd; }
+        .frame-item { background: white; padding: 8px; border-radius: 5px; display: flex; align-items: center; gap: 10px; width: 340px; border: 1px solid #ddd; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <h1>preBuild for hp2025 - シンプルAPNG</h1>
+    <h1>preBuild for hp2025 - LINE最終版</h1>
 
-    <div id="preview-area">
-        <canvas id="main-canvas" width="320" height="270"></canvas>
-    </div>
+    <div id="preview-area"><canvas id="main-canvas" width="320" height="270"></canvas></div>
 
     <div class="controls">
-        <button onclick="autoFill()">2枚目・3枚目を20枚目までコピー</button>
-        <button onclick="saveAPNG()" style="background:#ff5722; color:white; border:none;">APNG保存</button>
+        <button class="btn-copy" onclick="autoFill()">2枚目・3枚目を20枚目までコピー</button>
+        <button class="btn-save" onclick="saveForLine()">LINE用APNGを保存</button>
     </div>
 
     <div id="frames-list"></div>
@@ -39,11 +34,10 @@
     const buffers = new Array(MAX).fill(null);
     const ctx = document.getElementById('main-canvas').getContext('2d');
 
-    // リスト作成
     for (let i = 0; i < MAX; i++) {
         const div = document.createElement('div');
         div.className = 'frame-item';
-        div.innerHTML = `<span>${i+1}</span><img id="t-${i}" style="width:40px;height:40px;object-fit:contain;background:#eee"><input type="file" accept="image/*" onchange="load(${i}, this)">`;
+        div.innerHTML = `<span>${i+1}</span><img id="t-${i}" style="width:40px;height:40px;object-fit:contain;background:#f9f9f9"><input type="file" accept="image/*" onchange="load(${i}, this)">`;
         document.getElementById('frames-list').appendChild(div);
     }
 
@@ -58,10 +52,8 @@
                 cvs.width = W; cvs.height = H;
                 const c = cvs.getContext('2d');
                 c.clearRect(0,0,W,H);
-                // シンプルに描画（透過維持）
-                const s = Math.min(W/img.width, H/img.height);
+                const s = Math.min(300/img.width, 250/img.height); // 安全のため少し余白
                 c.drawImage(img, (W-img.width*s)/2, (H-img.height*s)/2, img.width*s, img.height*s);
-                
                 buffers[i] = c.getImageData(0,0,W,H).data.buffer;
                 document.getElementById(`t-${i}`).src = cvs.toDataURL();
                 ctx.clearRect(0,0,W,H); ctx.drawImage(cvs,0,0);
@@ -72,7 +64,7 @@
     }
 
     function autoFill() {
-        if (!buffers[0] || !buffers[1] || !buffers[2]) return alert("3枚目まで入れてください");
+        if (!buffers[0] || !buffers[1] || !buffers[2]) return alert("3枚目まで読み込んでください");
         for (let i = 3; i < MAX; i++) {
             const src = (i % 2 === 1) ? 1 : 2;
             buffers[i] = buffers[src];
@@ -80,20 +72,48 @@
         }
     }
 
-    function saveAPNG() {
+    function saveForLine() {
         const active = buffers.filter(b => b !== null);
-        if (active.length < 3) return alert("枚数が足りません");
+        if (active.length !== 20) return alert("20枚すべて埋めてください（4秒ジャストにするため）");
 
-        // 0.1秒(100ms)間隔の設定
-        const delays = new Array(active.length).fill(100);
+        // 1. 20枚×0.2秒＝4.0秒 (ループ1回) でエンコード
+        // LINEで最も安定する 256色指定
+        const delays = new Array(active.length).fill(200);
+        const apng = UPNG.encode(active, W, H, 256, delays);
         
-        // UPNG.encode: 第4引数 0 (ロスレス透過)
-        const apng = UPNG.encode(active, W, H, 0, delays);
+        // 2. バイナリを分解して、LINEの嫌がる特殊な圧縮チャンクを排除
+        const view = new DataView(apng);
+        let chunks = [], offset = 8;
+        while (offset < apng.byteLength) {
+            const len = view.getUint32(offset);
+            const type = view.getUint32(offset + 4);
+            const name = String.fromCharCode((type >> 24) & 0xff, (type >> 16) & 0xff, (type >> 8) & 0xff, type & 0xff);
+            chunks.push({ name, data: apng.slice(offset, offset + 12 + len) });
+            offset += 12 + len;
+        }
+
+        const result = [];
+        result.push(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer); // Sig
+        result.push(chunks.find(c => c.name === 'IHDR').data);
         
-        const blob = new Blob([apng], { type: 'image/png' });
+        const actl = chunks.find(c => c.name === 'acTL').data;
+        new DataView(actl).setUint32(12, 1); // 1回ループ
+        result.push(actl);
+
+        // fcTL, IDAT, fdAT のみを抽出し、それ以外の余計なチャンクを飛ばす
+        const essence = chunks.filter(c => ['fcTL', 'IDAT', 'fdAT'].includes(c.name));
+        essence.forEach(c => result.push(c.data));
+
+        result.push(chunks.find(c => c.name === 'IEND').data);
+
+        const blob = new Blob(result, { type: 'image/png' });
+        
+        // サイズチェック
+        if (blob.size > 320 * 1024) alert("320KBを超えています！");
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `simple_apng.png`; a.click();
+        a.href = url; a.download = `line_stamp_final_hope.png`; a.click();
     }
 </script>
 </body>
