@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - LINE APNG Fix</title>
+    <title>preBuild for hp2025 - LINE Perfect Fix</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
@@ -19,7 +19,8 @@
         .controls { width: 100%; max-width: 320px; margin: 15px 0; display: flex; flex-direction: column; gap: 8px; }
         button { padding: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
         .btn-fill { background: #009688; }
-        .btn-generate { background: #ff5722; font-size: 1.1rem; }
+        .btn-generate { background: #d32f2f; font-size: 1.1rem; box-shadow: 0 4px 0 #b71c1c; }
+        .btn-generate:active { transform: translateY(2px); box-shadow: none; }
         #frames-list { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 8px; }
         .frame-item { background: white; padding: 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; border: 1px solid #ddd; }
         .frame-thumb { width: 50px; height: 50px; background: #eee; object-fit: contain; }
@@ -27,15 +28,15 @@
 </head>
 <body>
 
-    <h1>preBuild for hp2025 LINE仕様</h1>
+    <h1>preBuild for hp2025 LINE Final</h1>
 
     <div id="preview-container" onclick="togglePreview()">
         <canvas id="preview-canvas" width="320" height="270"></canvas>
     </div>
 
     <div class="controls">
-        <button class="btn-fill" onclick="autoFillFrames()">2枚目・3枚目を20枚目までコピー</button>
-        <button class="btn-generate" onclick="generateLineAPNG()">LINE用APNGを書き出し</button>
+        <button class="btn-fill" onclick="autoFillFrames()">2枚目・3枚目をコピー</button>
+        <button class="btn-generate" onclick="generateLineAPNG()">LINEスタンプを生成</button>
     </div>
 
     <div id="frames-list"></div>
@@ -47,7 +48,6 @@
     let isPlaying = false, currentFrameIdx = 0, timer = null;
     const mainCtx = document.getElementById('preview-canvas').getContext('2d');
 
-    // リスト初期化
     const listContainer = document.getElementById('frames-list');
     for (let i = 0; i < MAX_FRAMES; i++) {
         const div = document.createElement('div');
@@ -67,7 +67,7 @@
                 canvas.width = WIDTH; canvas.height = HEIGHT;
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, WIDTH, HEIGHT);
-                const pad = 20;
+                const pad = 20; // LINE必須の余白
                 const scale = Math.min((WIDTH - pad) / img.width, (HEIGHT - pad) / img.height);
                 const x = (WIDTH - img.width * scale) / 2, y = (HEIGHT - img.height * scale) / 2;
                 ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
@@ -106,55 +106,57 @@
         }
     }
 
-    // LINE向けのバイナリ並べ替えロジック
+    // LINEスタンプ審査を通過するためのバイナリ再構築
     function generateLineAPNG() {
-        const validBufs = frameBuffers.filter(b => b !== null);
-        if (validBufs.length < 3) return alert("枚数が足りません");
+        const activeFrames = frameBuffers.filter(b => b !== null);
+        if (activeFrames.length < 3) return alert("枚数が足りません");
 
-        const delays = new Array(validBufs.length).fill(100);
-        // UPNGで一旦生成
-        const apngBuffer = UPNG.encode(validBufs, WIDTH, HEIGHT, 256, delays);
+        const delays = new Array(activeFrames.length).fill(100);
+        // UPNGでエンコード（ロスレス、256色制限）
+        const apngBuffer = UPNG.encode(activeFrames, WIDTH, HEIGHT, 256, delays);
         const view = new DataView(apngBuffer);
         
         let chunks = [];
-        let offset = 8; // Signature skip
+        let offset = 8; 
 
-        // 1. 全てのチャンクを抽出
         while (offset < apngBuffer.byteLength) {
             const len = view.getUint32(offset);
             const type = view.getUint32(offset + 4);
-            chunks.push({
-                type: type,
-                data: apngBuffer.slice(offset, offset + 12 + len),
-                name: String.fromCharCode((type >> 24) & 0xff, (type >> 16) & 0xff, (type >> 8) & 0xff, type & 0xff)
-            });
+            const name = String.fromCharCode((type >> 24) & 0xff, (type >> 16) & 0xff, (type >> 8) & 0xff, type & 0xff);
+            chunks.push({ name, data: apngBuffer.slice(offset, offset + 12 + len) });
             offset += 12 + len;
         }
 
-        // 2. LINEが好む順序に並べ替え
-        // Signature(8) -> IHDR -> acTL -> (IDAT/fcTL/fdAT...) -> IEND
-        const header = apngBuffer.slice(0, 8);
-        const ihdr = chunks.find(c => c.name === 'IHDR').data;
-        const actl = chunks.find(c => c.name === 'acTL').data;
-        const iend = chunks.find(c => c.name === 'IEND').data;
+        // --- LINE専用のチャンク順序再構成 ---
+        const result = [];
+        result.push(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer); // PNG Signature
         
-        // acTL内のループ回数を4に書き換え
-        const actlView = new DataView(actl);
-        actlView.setUint32(12, 4); 
+        // 1. IHDR
+        result.push(chunks.find(c => c.name === 'IHDR').data);
+        
+        // 2. acTL (ループ回数 4回)
+        const actlChunk = chunks.find(c => c.name === 'acTL').data;
+        new DataView(actlChunk).setUint32(12, 4); 
+        result.push(actlChunk);
 
-        const otherChunks = chunks.filter(c => !['IHDR', 'acTL', 'IEND'].includes(c.name));
+        // 3. 全ての fcTL と IDAT/fdAT を交互に配置
+        // UPNGの出力から fcTL とデータを正しい順序で抽出
+        const animChunks = chunks.filter(c => ['fcTL', 'IDAT', 'fdAT'].includes(c.name));
+        animChunks.forEach(c => result.push(c.data));
 
-        // 3. 再結合
-        const combined = [header, ihdr, actl];
-        otherChunks.forEach(c => combined.push(c.data));
-        combined.push(iend);
+        // 4. IEND
+        result.push(chunks.find(c => c.name === 'IEND').data);
 
-        const finalBlob = new Blob(combined, { type: 'image/png' });
+        const finalBlob = new Blob(result, { type: 'image/png' });
         const url = URL.createObjectURL(finalBlob);
+        
+        // ファイル名にタイムスタンプを付与して重複回避
         const link = document.createElement('a');
         link.href = url;
-        link.download = `line_stamp_final.png`;
+        link.download = `line_${Date.now()}.png`;
         link.click();
+
+        alert("生成完了！このファイルをアップロードしてみてください。");
     }
 </script>
 </body>
