@@ -3,22 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Transparent APNG</title>
+    <title>preBuild for hp2025 - APNG Maker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #eef2f3; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
         h1 { font-size: 1.1rem; color: #444; }
         
-        /* 透過を確認しやすくするため、プレビュー背景をチェック柄に */
+        /* プレビューエリア（タップ可能） */
         #preview-container {
             width: 320px; height: 270px;
             background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
             background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
             display: flex; align-items: center; justify-content: center;
-            position: sticky; top: 0; z-index: 100; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            position: sticky; top: 0; z-index: 100; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer; overflow: hidden;
         }
-        #preview-img { max-width: 100%; max-height: 100%; }
+        #preview-canvas { max-width: 100%; max-height: 100%; pointer-events: none; }
+        .play-hint { position: absolute; bottom: 5px; right: 10px; background: rgba(0,0,0,0.5); color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; }
 
         .controls { width: 100%; max-width: 320px; margin: 15px 0; display: flex; flex-direction: column; gap: 8px; }
         button { padding: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
@@ -27,22 +29,22 @@
 
         #frames-list { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 8px; }
         .frame-item { background: white; padding: 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; border: 1px solid #ddd; }
-        .frame-thumb { width: 50px; height: 50px; background: #eee; object-fit: contain; border: 1px solid #eee; }
-        input[type="file"] { font-size: 0.75rem; }
+        .frame-thumb { width: 50px; height: 50px; background: #eee; object-fit: contain; border: 1px solid #eee; border-radius: 4px; }
+        input[type="file"] { font-size: 0.75rem; flex-grow: 1; }
     </style>
 </head>
 <body>
 
-    <h1>preBuild for hp2025 - 透過APNG制作</h1>
+    <h1>preBuild for hp2025 - APNG</h1>
 
-    <div id="preview-container">
-        <img id="preview-img">
-        <div id="preview-placeholder">透過プレビュー</div>
+    <div id="preview-container" onclick="togglePreview()">
+        <canvas id="preview-canvas" width="320" height="270"></canvas>
+        <div class="play-hint" id="status-label">TAP TO PLAY</div>
     </div>
 
     <div class="controls">
-        <button class="btn-fill" onclick="autoFillFrames()">2枚目・3枚目を20枚目まで交互コピー</button>
-        <button class="btn-generate" onclick="generateAPNG()">透過APNGを生成・保存</button>
+        <button class="btn-fill" onclick="autoFillFrames()">繰り返し要素をコピー</button>
+        <button class="btn-generate" onclick="generateAPNG()">APNGを書き出し</button>
     </div>
 
     <div id="frames-list"></div>
@@ -51,14 +53,25 @@
     const MAX_FRAMES = 20;
     const WIDTH = 320;
     const HEIGHT = 270;
+    
+    // 画像データを保持（Imageオブジェクトの配列）
+    const frameImages = new Array(MAX_FRAMES).fill(null);
+    // 生成用のバイナリデータ
     const frameBuffers = new Array(MAX_FRAMES).fill(null);
+
+    let isPlaying = false;
+    let currentFrameIdx = 0;
+    let timer = null;
+
+    const mainCanvas = document.getElementById('preview-canvas');
+    const mainCtx = mainCanvas.getContext('2d');
 
     // リスト初期化
     const listContainer = document.getElementById('frames-list');
     for (let i = 0; i < MAX_FRAMES; i++) {
         const div = document.createElement('div');
         div.className = 'frame-item';
-        div.innerHTML = `<span style="font-size:12px">${i+1}</span><img id="thumb-${i}" class="frame-thumb"><input type="file" accept="image/png" onchange="loadFrame(${i}, this)">`;
+        div.innerHTML = `<span style="font-size:12px;width:15px;">${i+1}</span><img id="thumb-${i}" class="frame-thumb"><input type="file" accept="image/*" onchange="loadFrame(${i}, this)">`;
         listContainer.appendChild(div);
     }
 
@@ -70,26 +83,63 @@
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = WIDTH; canvas.height = HEIGHT;
-                const ctx = canvas.getContext('2d');
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = WIDTH; offCanvas.height = HEIGHT;
+                const offCtx = offCanvas.getContext('2d');
+                offCtx.clearRect(0, 0, WIDTH, HEIGHT);
                 
-                // 透過を維持（クリア）
-                ctx.clearRect(0, 0, WIDTH, HEIGHT);
-                
-                // 縦横比を維持して描画
                 const scale = Math.min(WIDTH / img.width, HEIGHT / img.height);
                 const x = (WIDTH / 2) - (img.width / 2) * scale;
                 const y = (HEIGHT / 2) - (img.height / 2) * scale;
-                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                offCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
                 
-                // UPNG用にArrayBufferを取得
-                frameBuffers[index] = ctx.getImageData(0, 0, WIDTH, HEIGHT).data.buffer;
-                document.getElementById(`thumb-${index}`).src = canvas.toDataURL();
+                frameImages[index] = offCanvas; // プレビュー用
+                frameBuffers[index] = offCtx.getImageData(0, 0, WIDTH, HEIGHT).data.buffer; // 生成用
+                document.getElementById(`thumb-${index}`).src = offCanvas.toDataURL();
+                
+                // 停止中なら最新の読み込み画像を表示
+                if (!isPlaying) drawFrame(index);
             };
             img.src = e.target.result;
         };
         reader.readAsDataURL(file);
+    }
+
+    function drawFrame(idx) {
+        mainCtx.clearRect(0, 0, WIDTH, HEIGHT);
+        if (frameImages[idx]) {
+            mainCtx.drawImage(frameImages[idx], 0, 0);
+        }
+    }
+
+    function togglePreview() {
+        const validFrames = frameImages.filter(img => img !== null);
+        if (validFrames.length === 0) return;
+
+        isPlaying = !isPlaying;
+        const label = document.getElementById('status-label');
+
+        if (isPlaying) {
+            label.innerText = "PLAYING...";
+            label.style.background = "#4caf50";
+            playLoop();
+        } else {
+            label.innerText = "TAP TO PLAY";
+            label.style.background = "rgba(0,0,0,0.5)";
+            clearTimeout(timer);
+        }
+    }
+
+    function playLoop() {
+        if (!isPlaying) return;
+        
+        // 次の有効なフレームを探す
+        do {
+            currentFrameIdx = (currentFrameIdx + 1) % MAX_FRAMES;
+        } while (frameImages[currentFrameIdx] === null);
+
+        drawFrame(currentFrameIdx);
+        timer = setTimeout(playLoop, 100); // 0.1秒
     }
 
     function autoFillFrames() {
@@ -97,37 +147,33 @@
         for (let i = 3; i < MAX_FRAMES; i++) {
             const srcIdx = (i % 2 === 1) ? 1 : 2;
             frameBuffers[i] = frameBuffers[srcIdx];
+            frameImages[i] = frameImages[srcIdx];
             document.getElementById(`thumb-${i}`).src = document.getElementById(`thumb-${srcIdx}`).src;
         }
+        alert("コピー完了！プレビューをタップして確認してください。");
     }
 
     function generateAPNG() {
-        const validFrames = frameBuffers.filter(b => b !== null);
-        if (validFrames.length < 3) return alert("枚数が足りません");
+        const validBuffers = frameBuffers.filter(b => b !== null);
+        if (validBuffers.length < 3) return alert("枚数が足りません");
 
-        const delays = new Array(validFrames.length).fill(100); // 0.1s
-        
-        // UPNGでエンコード（第4引数0 = ロスレス/透過維持）
-        let apngBuffer = UPNG.encode(validFrames, WIDTH, HEIGHT, 0, delays);
+        const delays = new Array(validBuffers.length).fill(100);
+        let apngBuffer = UPNG.encode(validBuffers, WIDTH, HEIGHT, 0, delays);
 
-        // ループ回数(num_plays)を4回に設定
-        // acTLチャンク内のループ回数設定箇所（オフセットなど厳密にはチャンク探索が必要ですが、UPNGの標準出力に対して書き換えを試みます）
+        // ループ回数を4回に設定
         const view = new DataView(apngBuffer);
-        // 通常のAPNG構造でacTLを探す簡易処理（※多くのブラウザで4回ループを認識させるため）
         for (let i = 0; i < apngBuffer.byteLength - 8; i++) {
             if (view.getUint32(i) === 0x6163544C) { // "acTL"
-                view.setUint32(i + 8, 4); // 4回ループに書き換え
+                view.setUint32(i + 8, 4); 
                 break;
             }
         }
 
         const blob = new Blob([apngBuffer], { type: 'image/png' });
         const url = URL.createObjectURL(blob);
-        document.getElementById('preview-img').src = url;
-        
         const link = document.createElement('a');
         link.href = url;
-        link.download = `preBuild_transparent_${Date.now()}.png`;
+        link.download = `preBuild_apng_${Date.now()}.png`;
         link.click();
     }
 </script>
