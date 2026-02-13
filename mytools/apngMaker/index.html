@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>preBuild for hp2025 - APNG Maker</title>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@1.0.11/dist/pako.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #f0f0f0; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        h1 { font-size: 1.2rem; color: #333; }
+        
+        /* プレビューエリア */
+        #preview-container {
+            width: 320px; height: 270px; background: #ddd;
+            display: flex; align-items: center; justify-content: center;
+            position: sticky; top: 10px; z-index: 100;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden;
+        }
+        #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        /* 操作ボタン */
+        .controls { width: 100%; max-width: 320px; margin: 20px 0; display: flex; flex-direction: column; gap: 10px; }
+        button { padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-fill { background: #4caf50; color: white; }
+        .btn-generate { background: #2196f3; color: white; font-size: 1.1rem; }
+
+        /* フレームリスト（スマホ縦画面用） */
+        #frames-list { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px; }
+        .frame-item {
+            background: white; padding: 10px; border-radius: 8px;
+            display: flex; align-items: center; gap: 15px; border: 1px solid #ccc;
+        }
+        .frame-index { font-weight: bold; width: 30px; }
+        .frame-thumb { width: 60px; height: 50px; background: #eee; border: 1px dashed #999; object-fit: contain; }
+        input[type="file"] { font-size: 0.8rem; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <h1>preBuild for hp2025 APNG</h1>
+
+    <div id="preview-container">
+        <img id="preview-img" src="" alt="Preview">
+        <div id="preview-placeholder">Preview Area</div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-fill" onclick="autoFillFrames()">繰り返し要素をコピー (2枚目・3枚目をループ)</button>
+        <button class="btn-generate" onclick="generateAPNG()">APNGを生成・ダウンロード</button>
+    </div>
+
+    <div id="frames-list">
+        </div>
+
+<script>
+    const MAX_FRAMES = 20;
+    const WIDTH = 320;
+    const HEIGHT = 270;
+    const frameData = new Array(MAX_FRAMES).fill(null);
+
+    // フレームリストの生成
+    const listContainer = document.getElementById('frames-list');
+    for (let i = 0; i < MAX_FRAMES; i++) {
+        const div = document.createElement('div');
+        div.className = 'frame-item';
+        div.innerHTML = `
+            <div class="frame-index">${i + 1}</div>
+            <img id="thumb-${i}" class="frame-thumb">
+            <input type="file" accept="image/*" onchange="loadFrame(${i}, this)">
+        `;
+        listContainer.appendChild(div);
+    }
+
+    // 画像読み込み処理
+    function loadFrame(index, input) {
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > 1024 * 1024) { alert("1MB以下の画像を選択してください"); return; }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                // キャンバスでリサイズ（320x270以内、アスペクト比維持）
+                const canvas = document.createElement('canvas');
+                canvas.width = WIDTH;
+                canvas.height = HEIGHT;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, WIDTH, HEIGHT);
+                
+                frameData[index] = ctx.getImageData(0, 0, WIDTH, HEIGHT).data.buffer;
+                document.getElementById(`thumb-${index}`).src = e.target.result;
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // オートフィル機能
+    // 1枚目：紹介画像、2枚目・3枚目を以降交互に配置
+    function autoFillFrames() {
+        if (!frameData[0] || !frameData[1] || !frameData[2]) {
+            alert("最低3枚の画像を設定してください。");
+            return;
+        }
+        for (let i = 3; i < MAX_FRAMES; i++) {
+            const sourceIndex = (i % 2 === 1) ? 1 : 2; // 奇数スロットは2枚目、偶数スロットは3枚目
+            frameData[i] = frameData[sourceIndex];
+            document.getElementById(`thumb-${i}`).src = document.getElementById(`thumb-${sourceIndex}`).src;
+        }
+        alert("空のスロットを2枚目と3枚目で埋めました。");
+    }
+
+    // APNG生成
+    async function generateAPNG() {
+        const activeFrames = frameData.filter(f => f !== null);
+        if (activeFrames.length < 3) {
+            alert("最低3枚の画像が必要です。");
+            return;
+        }
+
+        // UPNG.encode(frames, width, height, cnum, delays)
+        // frames: ArrayBufferの配列, delays: フレームごとの待機時間(ms)
+        const delays = new Array(activeFrames.length).fill(100); // 0.1秒 = 100ms
+        
+        // APNG作成 (ループ数: 4)
+        const apngBuffer = UPNG.encode(activeFrames, WIDTH, HEIGHT, 0, delays);
+        
+        // ダウンロード処理
+        const blob = new Blob([apngBuffer], { type: 'image/png' });
+        const url = URL.createObjectURL(blob);
+        
+        const previewImg = document.getElementById('preview-img');
+        const placeholder = document.getElementById('preview-placeholder');
+        
+        previewImg.src = url;
+        placeholder.style.display = 'none';
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `animation_${Date.now()}.png`;
+        link.click();
+    }
+</script>
+</body>
+</html>
