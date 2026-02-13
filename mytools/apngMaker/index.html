@@ -153,29 +153,42 @@
         alert("コピー完了！プレビューをタップして確認してください。");
     }
 
-    function generateAPNG() {
-        const validBuffers = frameBuffers.filter(b => b !== null);
-        if (validBuffers.length < 3) return alert("枚数が足りません");
+// generateAPNG関数の中身を以下のように差し替えてみてください
+function generateAPNG() {
+    const validBuffers = frameBuffers.filter(b => b !== null);
+    if (validBuffers.length < 3) return alert("枚数が足りません");
 
-        const delays = new Array(validBuffers.length).fill(100);
-        let apngBuffer = UPNG.encode(validBuffers, WIDTH, HEIGHT, 0, delays);
+    // LINE仕様: 全体の再生時間は整数（2秒）で、0.1秒(100ms)間隔
+    const delays = new Array(validBuffers.length).fill(100);
+    
+    // UPNG.encodeを実行
+    // 第4引数 0 はロスレス、最後の 0 は全フレームを差分圧縮せずに保持（LINEで安定しやすい）
+    let apngBuffer = UPNG.encode(validBuffers, WIDTH, HEIGHT, 0, delays);
 
-        // ループ回数を4回に設定
-        const view = new DataView(apngBuffer);
-        for (let i = 0; i < apngBuffer.byteLength - 8; i++) {
-            if (view.getUint32(i) === 0x6163544C) { // "acTL"
-                view.setUint32(i + 8, 4); 
-                break;
-            }
+    // --- LINE用バイナリ調整 ---
+    const view = new DataView(apngBuffer);
+    let offset = 8; // PNG Headerをスキップ
+    
+    while (offset < apngBuffer.byteLength) {
+        const length = view.getUint32(offset);
+        const type = view.getUint32(offset + 4);
+        
+        // acTL (Animation Control Tag) を探す
+        if (type === 0x6163544C) { 
+            // ループ回数を「4回」に設定 (オフセット: length(4) + type(4) + num_frames(4) + num_plays(4))
+            view.setUint32(offset + 12, 4); 
         }
-
-        const blob = new Blob([apngBuffer], { type: 'image/png' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `preBuild_apng_${Date.now()}.png`;
-        link.click();
+        offset += 12 + length;
     }
+
+    const blob = new Blob([apngBuffer], { type: 'image/png' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `line_stamp_${Date.now()}.png`;
+    link.click();
+}
 </script>
 </body>
 </html>
