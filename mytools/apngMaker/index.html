@@ -3,48 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - APNG Maker</title>
+    <title>preBuild for hp2025 - LINE APNG</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #eef2f3; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        h1 { font-size: 1.1rem; color: #444; }
-        
-        /* プレビューエリア（タップ可能） */
+        h1 { font-size: 1rem; color: #444; }
         #preview-container {
-            width: 320px; height: 270px;
+            width: 320px; height: 270px; background-color: #eee;
             background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
             background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
             display: flex; align-items: center; justify-content: center;
             position: sticky; top: 0; z-index: 100; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            cursor: pointer; overflow: hidden;
         }
-        #preview-canvas { max-width: 100%; max-height: 100%; pointer-events: none; }
-        .play-hint { position: absolute; bottom: 5px; right: 10px; background: rgba(0,0,0,0.5); color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; }
-
+        #preview-canvas { max-width: 100%; max-height: 100%; }
         .controls { width: 100%; max-width: 320px; margin: 15px 0; display: flex; flex-direction: column; gap: 8px; }
-        button { padding: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .btn-fill { background: #009688; color: white; }
-        .btn-generate { background: #ff5722; color: white; }
-
+        button { padding: 15px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-fill { background: #009688; }
+        .btn-generate { background: #ff5722; }
         #frames-list { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 8px; }
         .frame-item { background: white; padding: 10px; border-radius: 8px; display: flex; align-items: center; gap: 10px; border: 1px solid #ddd; }
-        .frame-thumb { width: 50px; height: 50px; background: #eee; object-fit: contain; border: 1px solid #eee; border-radius: 4px; }
-        input[type="file"] { font-size: 0.75rem; flex-grow: 1; }
+        .frame-thumb { width: 50px; height: 50px; background: #eee; object-fit: contain; }
     </style>
 </head>
 <body>
 
-    <h1>preBuild for hp2025 - APNG</h1>
+    <h1>preBuild for hp2025 - LINEスタンプ用</h1>
 
     <div id="preview-container" onclick="togglePreview()">
         <canvas id="preview-canvas" width="320" height="270"></canvas>
-        <div class="play-hint" id="status-label">TAP TO PLAY</div>
     </div>
 
     <div class="controls">
         <button class="btn-fill" onclick="autoFillFrames()">繰り返し要素をコピー</button>
-        <button class="btn-generate" onclick="generateAPNG()">APNGを書き出し</button>
+        <button class="btn-generate" onclick="generateAPNG()">LINE用APNGを書き出し</button>
     </div>
 
     <div id="frames-list"></div>
@@ -53,32 +45,23 @@
     const MAX_FRAMES = 20;
     const WIDTH = 320;
     const HEIGHT = 270;
-    
-    // 画像データを保持（Imageオブジェクトの配列）
-    const frameImages = new Array(MAX_FRAMES).fill(null);
-    // 生成用のバイナリデータ
     const frameBuffers = new Array(MAX_FRAMES).fill(null);
-
-    let isPlaying = false;
-    let currentFrameIdx = 0;
-    let timer = null;
-
+    const frameImages = new Array(MAX_FRAMES).fill(null);
+    let isPlaying = false, currentFrameIdx = 0, timer = null;
     const mainCanvas = document.getElementById('preview-canvas');
     const mainCtx = mainCanvas.getContext('2d');
 
-    // リスト初期化
     const listContainer = document.getElementById('frames-list');
     for (let i = 0; i < MAX_FRAMES; i++) {
         const div = document.createElement('div');
         div.className = 'frame-item';
-        div.innerHTML = `<span style="font-size:12px;width:15px;">${i+1}</span><img id="thumb-${i}" class="frame-thumb"><input type="file" accept="image/*" onchange="loadFrame(${i}, this)">`;
+        div.innerHTML = `<span style="font-size:10px">${i+1}</span><img id="thumb-${i}" class="frame-thumb"><input type="file" accept="image/*" onchange="loadFrame(${i}, this)">`;
         listContainer.appendChild(div);
     }
 
     function loadFrame(index, input) {
         const file = input.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
@@ -88,58 +71,35 @@
                 const offCtx = offCanvas.getContext('2d');
                 offCtx.clearRect(0, 0, WIDTH, HEIGHT);
                 
-                const scale = Math.min(WIDTH / img.width, HEIGHT / img.height);
+                // LINE用：上下左右に10pxの余白を考慮して描画
+                const padding = 20; 
+                const scale = Math.min((WIDTH - padding) / img.width, (HEIGHT - padding) / img.height);
                 const x = (WIDTH / 2) - (img.width / 2) * scale;
                 const y = (HEIGHT / 2) - (img.height / 2) * scale;
                 offCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
                 
-                frameImages[index] = offCanvas; // プレビュー用
-                frameBuffers[index] = offCtx.getImageData(0, 0, WIDTH, HEIGHT).data.buffer; // 生成用
+                frameImages[index] = offCanvas;
+                frameBuffers[index] = offCtx.getImageData(0, 0, WIDTH, HEIGHT).data.buffer;
                 document.getElementById(`thumb-${index}`).src = offCanvas.toDataURL();
-                
-                // 停止中なら最新の読み込み画像を表示
-                if (!isPlaying) drawFrame(index);
+                if (!isPlaying) { mainCtx.clearRect(0,0,WIDTH,HEIGHT); mainCtx.drawImage(offCanvas,0,0); }
             };
             img.src = e.target.result;
         };
         reader.readAsDataURL(file);
     }
 
-    function drawFrame(idx) {
-        mainCtx.clearRect(0, 0, WIDTH, HEIGHT);
-        if (frameImages[idx]) {
-            mainCtx.drawImage(frameImages[idx], 0, 0);
-        }
-    }
-
     function togglePreview() {
-        const validFrames = frameImages.filter(img => img !== null);
-        if (validFrames.length === 0) return;
-
+        if (frameImages.filter(i => i).length === 0) return;
         isPlaying = !isPlaying;
-        const label = document.getElementById('status-label');
-
-        if (isPlaying) {
-            label.innerText = "PLAYING...";
-            label.style.background = "#4caf50";
-            playLoop();
-        } else {
-            label.innerText = "TAP TO PLAY";
-            label.style.background = "rgba(0,0,0,0.5)";
-            clearTimeout(timer);
-        }
+        if (isPlaying) playLoop(); else clearTimeout(timer);
     }
 
     function playLoop() {
         if (!isPlaying) return;
-        
-        // 次の有効なフレームを探す
-        do {
-            currentFrameIdx = (currentFrameIdx + 1) % MAX_FRAMES;
-        } while (frameImages[currentFrameIdx] === null);
-
-        drawFrame(currentFrameIdx);
-        timer = setTimeout(playLoop, 100); // 0.1秒
+        do { currentFrameIdx = (currentFrameIdx + 1) % MAX_FRAMES; } while (!frameImages[currentFrameIdx]);
+        mainCtx.clearRect(0,0,WIDTH,HEIGHT);
+        mainCtx.drawImage(frameImages[currentFrameIdx], 0, 0);
+        timer = setTimeout(playLoop, 100);
     }
 
     function autoFillFrames() {
@@ -150,45 +110,37 @@
             frameImages[i] = frameImages[srcIdx];
             document.getElementById(`thumb-${i}`).src = document.getElementById(`thumb-${srcIdx}`).src;
         }
-        alert("コピー完了！プレビューをタップして確認してください。");
     }
 
-// generateAPNG関数の中身を以下のように差し替えてみてください
-function generateAPNG() {
-    const validBuffers = frameBuffers.filter(b => b !== null);
-    if (validBuffers.length < 3) return alert("枚数が足りません");
+    function generateAPNG() {
+        const validBufs = frameBuffers.filter(b => b !== null);
+        if (validBufs.length < 3) return alert("枚数が足りません");
 
-    // LINE仕様: 全体の再生時間は整数（2秒）で、0.1秒(100ms)間隔
-    const delays = new Array(validBuffers.length).fill(100);
-    
-    // UPNG.encodeを実行
-    // 第4引数 0 はロスレス、最後の 0 は全フレームを差分圧縮せずに保持（LINEで安定しやすい）
-    let apngBuffer = UPNG.encode(validBuffers, WIDTH, HEIGHT, 0, delays);
+        // 重要：256色に減色してファイルサイズをLINE制限(320KB)内に抑える
+        // 第4引数を 256 に変更
+        const delays = new Array(validBufs.length).fill(100);
+        let apngBuffer = UPNG.encode(validBufs, WIDTH, HEIGHT, 256, delays);
 
-    // --- LINE用バイナリ調整 ---
-    const view = new DataView(apngBuffer);
-    let offset = 8; // PNG Headerをスキップ
-    
-    while (offset < apngBuffer.byteLength) {
-        const length = view.getUint32(offset);
-        const type = view.getUint32(offset + 4);
-        
-        // acTL (Animation Control Tag) を探す
-        if (type === 0x6163544C) { 
-            // ループ回数を「4回」に設定 (オフセット: length(4) + type(4) + num_frames(4) + num_plays(4))
-            view.setUint32(offset + 12, 4); 
+        // ループ回数を4回に固定
+        const view = new DataView(apngBuffer);
+        for (let i = 0; i < apngBuffer.byteLength - 8; i++) {
+            if (view.getUint32(i) === 0x6163544C) { // acTL
+                view.setUint32(i + 12, 4); 
+                break;
+            }
         }
-        offset += 12 + length;
-    }
 
-    const blob = new Blob([apngBuffer], { type: 'image/png' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `line_stamp_${Date.now()}.png`;
-    link.click();
-}
+        const blob = new Blob([apngBuffer], { type: 'image/png' });
+        if (blob.size > 320 * 1024) {
+            alert(`サイズオーバー: ${(blob.size / 1024).toFixed(1)}KB\n320KB以下にする必要があります。画像をシンプルにしてください。`);
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `line_${Date.now()}.png`;
+        link.click();
+    }
 </script>
 </body>
 </html>
