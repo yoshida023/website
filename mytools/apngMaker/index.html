@@ -3,68 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>preBuild for hp2025 - Mobile Pro</title>
+    <title>preBuild for hp2025 - Professional Editor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        :root { --primary: #2196F3; --accent: #d32f2f; --bg: #1a1a1a; --card: #2d2d2d; --text: #eee; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; overflow-x: hidden; }
+        :root { --primary: #2196F3; --accent: #ff5252; --bg: #121212; --card: #1e1e1e; --text: #eee; --checker: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Yu Gothic", sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
         
-        /* 上部固定プレビュー */
-        .sticky-header { position: sticky; top: 0; background: var(--bg); z-index: 100; border-bottom: 1px solid #444; padding: 10px 0; }
-        #preview-area { 
-            width: 240px; height: 202px; margin: 0 auto 10px; 
-            background-color: #333; border: 2px solid #555; border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            background-image: linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%);
-            background-size: 16px 16px; position: relative; cursor: pointer;
+        /* 透過確認用格子模様 */
+        .transparent-bg {
+            background-color: #222;
+            background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25%), linear-gradient(-45deg, var(--checker) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--checker) 75%), linear-gradient(-45deg, transparent 75%, var(--checker) 75%);
+            background-size: 10px 10px;
         }
-        canvas { max-width: 100%; max-height: 100%; border-radius: 8px; }
-        #play-state-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 20px; font-weight: bold; pointer-events: none; transition: opacity 0.3s; }
 
-        .top-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 15px 10px; }
-        .mode-selector { grid-column: 1 / -1; background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 5px; font-size: 14px; }
-        
-        button { padding: 14px 10px; font-weight: bold; cursor: pointer; border-radius: 10px; border: none; color: white; font-size: 14px; }
+        /* 固定ヘッダー（プレビュー） */
+        .sticky-header { position: sticky; top: 0; background: var(--bg); z-index: 100; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        #preview-area { 
+            width: 200px; height: 168px; margin: 10px auto; 
+            border: 2px solid #444; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative; cursor: pointer;
+        }
+        canvas { max-width: 100%; max-height: 100%; }
+        #play-state-overlay { position: absolute; font-size: 12px; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 20px; color: #fff; bottom: 5px; }
+
+        .top-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 10px; }
+        button { padding: 12px 5px; font-weight: bold; border-radius: 8px; border: none; color: white; font-size: 13px; transition: 0.2s; }
         .btn-blue { background: var(--primary); }
-        .btn-green { background: #009688; }
+        .btn-green { background: #00897b; }
         .btn-red { background: var(--accent); }
-        .btn-gray { background: #555; }
+        .btn-gray { background: #444; }
+
+        /* メインフレーム専用エリア */
+        .main-frame-section { background: #252525; padding: 15px; margin: 10px; border-radius: 12px; border: 1px solid #3d8bff; }
+        .section-title { font-size: 12px; font-weight: bold; color: var(--primary); margin-bottom: 8px; text-align: left; }
+
+        /* リストスタイル */
+        #frames-list { padding: 0 10px 100px; display: flex; flex-direction: column; gap: 12px; }
+        .frame-item { background: var(--card); padding: 12px; border-radius: 12px; display: flex; align-items: center; gap: 15px; border: 1px solid #333; }
+        .img-container { width: 80px; height: 80px; border-radius: 6px; overflow: hidden; border: 1px solid #444; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .img-container img { max-width: 100%; max-height: 100%; }
         
-        /* フレームリスト（スクロールエリア） */
-        #frames-list { padding: 10px 15px 100px; display: flex; flex-direction: column; gap: 10px; }
-        .frame-item { background: var(--card); padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid #444; }
-        .thumb { width: 50px; height: 50px; object-fit: contain; background: #222; border-radius: 6px; }
-        .frame-info { font-weight: bold; width: 25px; color: #888; font-size: 14px; }
-        .file-input-wrapper { flex-grow: 1; }
-        .file-input-wrapper input { width: 100%; font-size: 11px; color: #aaa; }
-        .item-ctrls { display: flex; flex-direction: column; gap: 4px; }
-        .btn-mini { padding: 6px 10px; font-size: 12px; background: #444; border-radius: 4px; }
-        .btn-del { background: #611; color: #f88; }
+        .frame-info { font-size: 18px; font-weight: bold; color: #666; width: 25px; }
+        .file-input { flex-grow: 1; font-size: 12px; }
+        .item-ctrls { display: flex; flex-direction: column; gap: 6px; }
+        .btn-mini { padding: 8px; font-size: 14px; background: #333; border-radius: 6px; }
+        .btn-del { color: var(--accent); }
     </style>
 </head>
 <body>
 
     <div class="sticky-header">
-        <div id="preview-area" onclick="togglePreview()">
+        <div id="preview-area" class="transparent-bg" onclick="togglePreview()">
             <canvas id="main-canvas" width="320" height="270"></canvas>
             <div id="play-state-overlay">TAP TO PLAY</div>
         </div>
 
-        <div class="mode-selector">
-            設定: 
-            <label><input type="radio" name="fps" value="100" onchange="changeMode(100)"> 0.1s</label> &nbsp;
-            <label><input type="radio" name="fps" value="200" onchange="changeMode(200)" checked> 0.2s</label>
-        </div>
-
         <div class="top-controls">
+            <div style="grid-column: 1/-1; background:#222; padding:8px; border-radius:8px; margin-bottom:5px; font-size:12px;">
+                速度: <label><input type="radio" name="fps" value="100" onchange="changeMode(100)"> 0.1s</label>
+                <label style="margin-left:15px;"><input type="radio" name="fps" value="200" onchange="changeMode(200)" checked> 0.2s</label>
+            </div>
             <button class="btn-blue" onclick="document.getElementById('bulk-upload').click()">一括読込</button>
             <input type="file" id="bulk-upload" multiple accept="image/*" style="display:none" onchange="handleBulkUpload(this)">
-            <button class="btn-green" onclick="smartFill()">自動充填</button>
+            <button class="btn-green" onclick="smartFill()">パターン自動充填</button>
             <button class="btn-gray" onclick="restoreFromDB()">復元</button>
             <button class="btn-red" onclick="saveForLine()">APNG保存</button>
         </div>
     </div>
+
+    <div class="main-frame-section" id="main-frame-root"></div>
 
     <div id="frames-list"></div>
 
@@ -72,12 +81,12 @@
     let currentDelay = 200;
     const MAX_FRAMES = 20;
     let frameBuffers = new Array(MAX_FRAMES).fill(null);
-    let isPlaying = false; // 初期状態は停止
+    let isPlaying = false;
     let previewTimer = null;
     let currentPreviewIdx = 0;
     const mainCtx = document.getElementById('main-canvas').getContext('2d');
 
-    const DB_NAME = "hp2025_mobile_v1", STORE_NAME = "frames";
+    const DB_NAME = "hp2025_mobile_v2", STORE_NAME = "frames";
     function openDB() {
         return new Promise(resolve => {
             const req = indexedDB.open(DB_NAME, 1);
@@ -98,7 +107,7 @@
                 frameBuffers = req.result.buffers;
                 currentDelay = req.result.delay;
                 document.querySelector(`input[value="${currentDelay}"]`).checked = true;
-                renderList();
+                renderAll();
                 updateStaticPreview();
                 alert("復元しました");
             }
@@ -111,27 +120,41 @@
         if (isPlaying) startPreview();
     }
 
-    function renderList() {
+    function renderAll() {
         const list = document.getElementById('frames-list');
+        const mainRoot = document.getElementById('main-frame-root');
         list.innerHTML = '';
+        mainRoot.innerHTML = '<div class="section-title">MAIN (FRAME 1)</div>';
+
         for (let i = 0; i < MAX_FRAMES; i++) {
             const buf = frameBuffers[i];
-            const div = document.createElement('div');
-            div.className = 'frame-item';
             const thumbSrc = buf ? arrayBufferToDataURL(buf) : '';
-            div.innerHTML = `
-                <span class="frame-info">${i+1}</span>
-                <img src="${thumbSrc || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}" class="thumb" style="${!buf ? 'opacity:0.1' : ''}">
-                <div class="file-input-wrapper">
-                    <input type="file" accept="image/*" onchange="loadSingle(${i}, this)">
+            const html = `
+                <div class="img-container transparent-bg">
+                    <img src="${thumbSrc || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}" style="${!buf ? 'opacity:0' : ''}">
+                </div>
+                <div class="file-input">
+                    <input type="file" accept="image/*" onchange="loadSingle(${i}, this)" style="width:100%">
                 </div>
                 <div class="item-ctrls">
-                    <button class="btn-mini" onclick="moveFrame(${i}, -1)">▲</button>
-                    <button class="btn-mini" onclick="moveFrame(${i}, 1)">▼</button>
-                    <button class="btn-mini btn-del" onclick="deleteFrame(${i})">×</button>
+                    ${i > 0 ? `<button class="btn-mini" onclick="moveFrame(${i}, -1)">▲</button>
+                               <button class="btn-mini" onclick="moveFrame(${i}, 1)">▼</button>` : ''}
+                    <button class="btn-mini btn-del" onclick="deleteFrame(${i})">×消</button>
                 </div>
             `;
-            list.appendChild(div);
+
+            if (i === 0) {
+                const div = document.createElement('div');
+                div.className = 'frame-item';
+                div.style.borderColor = "#3d8bff";
+                div.innerHTML = html;
+                mainRoot.appendChild(div);
+            } else {
+                const div = document.createElement('div');
+                div.className = 'frame-item';
+                div.innerHTML = `<span class="frame-info">${i+1}</span>` + html;
+                list.appendChild(div);
+            }
         }
     }
 
@@ -139,7 +162,7 @@
         const file = input.files[0];
         if (!file) return;
         frameBuffers[i] = await processImage(file);
-        renderList();
+        renderAll();
         saveToDB();
         updateStaticPreview();
     }
@@ -153,7 +176,7 @@
                 fIdx++;
             }
         }
-        renderList();
+        renderAll();
         saveToDB();
         updateStaticPreview();
     }
@@ -167,7 +190,7 @@
                     const cvs = document.createElement('canvas');
                     cvs.width = 320; cvs.height = 270;
                     const c = cvs.getContext('2d');
-                    const s = Math.min(300/img.width, 250/img.height);
+                    const s = Math.min(320/img.width, 270/img.height);
                     c.drawImage(img, (320-img.width*s)/2, (270-img.height*s)/2, img.width*s, img.height*s);
                     resolve(c.getImageData(0,0,320,270).data.buffer);
                 };
@@ -179,7 +202,7 @@
 
     function deleteFrame(i) {
         frameBuffers[i] = null;
-        renderList();
+        renderAll();
         saveToDB();
     }
 
@@ -187,29 +210,28 @@
         const target = i + dir;
         if (target < 0 || target >= MAX_FRAMES) return;
         [frameBuffers[i], frameBuffers[target]] = [frameBuffers[target], frameBuffers[i]];
-        renderList();
+        renderAll();
         saveToDB();
     }
 
     function smartFill() {
-        const pattern = frameBuffers.filter(b => b !== null);
-        if (pattern.length < 2) return alert("2フレーム以上に画像を配置してください");
+        // 2枚目以降のパターンを取得
+        const pattern = frameBuffers.slice(1).filter(b => b !== null);
+        if (pattern.length < 1) return alert("2フレーム目以降に画像を配置してください");
         
-        for (let i = 0; i < MAX_FRAMES; i++) {
+        for (let i = 1; i < MAX_FRAMES; i++) {
             if (frameBuffers[i] === null) {
-                frameBuffers[i] = pattern[i % pattern.length];
+                // i-1で調整してループさせる
+                frameBuffers[i] = pattern[(i - 1) % pattern.length];
             }
         }
-        renderList();
+        renderAll();
         saveToDB();
     }
 
     function togglePreview() {
         isPlaying = !isPlaying;
-        const overlay = document.getElementById('play-state-overlay');
-        overlay.style.opacity = isPlaying ? "0" : "1";
-        overlay.innerText = isPlaying ? "" : "PAUSED";
-        
+        document.getElementById('play-state-overlay').innerText = isPlaying ? "PLAYING" : "PAUSED";
         if (isPlaying) startPreview();
         else if (previewTimer) clearInterval(previewTimer);
     }
@@ -228,8 +250,8 @@
     function updateStaticPreview(idx = null) {
         const targetIdx = idx !== null ? idx : frameBuffers.findIndex(b => b !== null);
         if (targetIdx === -1) return;
-        const idata = new ImageData(new Uint8ClampedArray(frameBuffers[targetIdx]), 320, 270);
-        mainCtx.putImageData(idata, 0, 0);
+        mainCtx.clearRect(0,0,320,270);
+        mainCtx.putImageData(new ImageData(new Uint8ClampedArray(frameBuffers[targetIdx]), 320, 270), 0, 0);
     }
 
     function arrayBufferToDataURL(buf) {
@@ -252,11 +274,11 @@
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([apng], {type: 'image/png'}));
-        a.download = `line_${active.length}f_${(active.length*currentDelay)/1000}s.png`;
+        a.download = `line_stamp.png`;
         a.click();
     }
 
-    renderList();
+    renderAll();
 </script>
 </body>
 </html>
