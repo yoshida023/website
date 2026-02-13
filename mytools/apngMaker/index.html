@@ -2,66 +2,66 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - Mode Selector</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>preBuild for hp2025 - Mobile Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        :root { --primary: #2196F3; --accent: #d32f2f; --bg: #eef2f3; }
-        body { font-family: sans-serif; background: var(--bg); text-align: center; padding: 20px; color: #333; margin: 0; }
+        :root { --primary: #2196F3; --accent: #d32f2f; --bg: #1a1a1a; --card: #2d2d2d; --text: #eee; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; overflow-x: hidden; }
         
-        .header-ui { position: sticky; top: 0; background: var(--bg); padding: 10px; z-index: 100; border-bottom: 2px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        /* 上部固定プレビュー */
+        .sticky-header { position: sticky; top: 0; background: var(--bg); z-index: 100; border-bottom: 1px solid #444; padding: 10px 0; }
         #preview-area { 
-            width: 320px; height: 270px; margin: 10px auto; 
-            background-color: #eee; border: 2px solid #ccc; border-radius: 8px;
+            width: 240px; height: 202px; margin: 0 auto 10px; 
+            background-color: #333; border: 2px solid #555; border-radius: 12px;
             display: flex; align-items: center; justify-content: center;
-            background-image: linear-gradient(45deg, #ddd 25%, transparent 25%), linear-gradient(-45deg, #ddd 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ddd 75%), linear-gradient(-45deg, transparent 75%, #ddd 75%);
-            background-size: 20px 20px; position: relative; cursor: pointer;
+            background-image: linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%);
+            background-size: 16px 16px; position: relative; cursor: pointer;
         }
-        canvas { max-width: 100%; max-height: 100%; }
+        canvas { max-width: 100%; max-height: 100%; border-radius: 8px; }
+        #play-state-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 20px; font-weight: bold; pointer-events: none; transition: opacity 0.3s; }
 
-        .mode-selector { background: #fff; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: inline-flex; gap: 15px; align-items: center; border: 1px solid #ccc; }
-        .main-controls { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .top-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 15px 10px; }
+        .mode-selector { grid-column: 1 / -1; background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 5px; font-size: 14px; }
         
-        button { padding: 10px 16px; font-weight: bold; cursor: pointer; border-radius: 6px; border: none; color: white; transition: 0.2s; font-size: 13px; }
+        button { padding: 14px 10px; font-weight: bold; cursor: pointer; border-radius: 10px; border: none; color: white; font-size: 14px; }
         .btn-blue { background: var(--primary); }
         .btn-green { background: #009688; }
-        .btn-red { background: var(--accent); box-shadow: 0 4px #b71c1c; }
-        .btn-toggle { background: #673ab7; }
-        .btn-save-db { background: #607D8B; }
+        .btn-red { background: var(--accent); }
+        .btn-gray { background: #555; }
         
-        #frames-list { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 20px; padding-bottom: 50px; }
-        .frame-item { background: white; padding: 8px; border-radius: 8px; display: flex; align-items: center; gap: 10px; width: 450px; border: 1px solid #ddd; }
-        .thumb { width: 40px; height: 40px; object-fit: contain; background: #f9f9f9; border: 1px solid #eee; }
-        .frame-info { font-weight: bold; width: 25px; font-size: 12px; color: #888; }
-        .item-ctrls { display: flex; gap: 4px; margin-left: auto; }
-        .btn-mini { padding: 4px 8px; font-size: 10px; background: #9e9e9e; color: white; border: none; border-radius: 4px; }
-        .btn-del { background: #ff5252; }
-        
-        label { font-size: 14px; font-weight: bold; cursor: pointer; }
+        /* フレームリスト（スクロールエリア） */
+        #frames-list { padding: 10px 15px 100px; display: flex; flex-direction: column; gap: 10px; }
+        .frame-item { background: var(--card); padding: 10px; border-radius: 12px; display: flex; align-items: center; gap: 12px; border: 1px solid #444; }
+        .thumb { width: 50px; height: 50px; object-fit: contain; background: #222; border-radius: 6px; }
+        .frame-info { font-weight: bold; width: 25px; color: #888; font-size: 14px; }
+        .file-input-wrapper { flex-grow: 1; }
+        .file-input-wrapper input { width: 100%; font-size: 11px; color: #aaa; }
+        .item-ctrls { display: flex; flex-direction: column; gap: 4px; }
+        .btn-mini { padding: 6px 10px; font-size: 12px; background: #444; border-radius: 4px; }
+        .btn-del { background: #611; color: #f88; }
     </style>
 </head>
 <body>
 
-    <div class="header-ui">
-        <h1>preBuild for hp2025</h1>
-        
-        <div class="mode-selector">
-            <span>設定：</span>
-            <label><input type="radio" name="fps" value="100" onchange="changeMode(100, 10)"> 0.1秒 (10枚/計1s)</label>
-            <label><input type="radio" name="fps" value="200" onchange="changeMode(200, 20)" checked> 0.2秒 (20枚/計4s)</label>
-        </div>
-
+    <div class="sticky-header">
         <div id="preview-area" onclick="togglePreview()">
             <canvas id="main-canvas" width="320" height="270"></canvas>
-            <div id="play-state-label" style="position:absolute; bottom:5px; background:rgba(0,0,0,0.5); color:white; padding:2px 8px; border-radius:10px; font-size:10px;">再生中</div>
+            <div id="play-state-overlay">TAP TO PLAY</div>
         </div>
 
-        <div class="main-controls">
-            <button class="btn-toggle" id="btn-play-pause" onclick="togglePreview()">一時停止</button>
-            <button class="btn-blue" onclick="document.getElementById('bulk-upload').click()">一括アップロード</button>
+        <div class="mode-selector">
+            設定: 
+            <label><input type="radio" name="fps" value="100" onchange="changeMode(100)"> 0.1s</label> &nbsp;
+            <label><input type="radio" name="fps" value="200" onchange="changeMode(200)" checked> 0.2s</label>
+        </div>
+
+        <div class="top-controls">
+            <button class="btn-blue" onclick="document.getElementById('bulk-upload').click()">一括読込</button>
             <input type="file" id="bulk-upload" multiple accept="image/*" style="display:none" onchange="handleBulkUpload(this)">
-            <button class="btn-green" onclick="autoFill()">自動充填</button>
-            <button class="btn-save-db" onclick="restoreFromDB()">復元</button>
+            <button class="btn-green" onclick="smartFill()">自動充填</button>
+            <button class="btn-gray" onclick="restoreFromDB()">復元</button>
             <button class="btn-red" onclick="saveForLine()">APNG保存</button>
         </div>
     </div>
@@ -70,15 +70,14 @@
 
 <script>
     let currentDelay = 200;
-    let maxFramesLimit = 20;
-    let frameBuffers = new Array(20).fill(null);
-    let isPlaying = true;
+    const MAX_FRAMES = 20;
+    let frameBuffers = new Array(MAX_FRAMES).fill(null);
+    let isPlaying = false; // 初期状態は停止
     let previewTimer = null;
     let currentPreviewIdx = 0;
     const mainCtx = document.getElementById('main-canvas').getContext('2d');
 
-    // DB機能
-    const DB_NAME = "hp2025_DB_v3", STORE_NAME = "frames";
+    const DB_NAME = "hp2025_mobile_v1", STORE_NAME = "frames";
     function openDB() {
         return new Promise(resolve => {
             const req = indexedDB.open(DB_NAME, 1);
@@ -89,7 +88,7 @@
     async function saveToDB() {
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, "readwrite");
-        tx.objectStore(STORE_NAME).put({buffers: frameBuffers, delay: currentDelay, limit: maxFramesLimit}, "current_project");
+        tx.objectStore(STORE_NAME).put({buffers: frameBuffers, delay: currentDelay}, "current_project");
     }
     async function restoreFromDB() {
         const db = await openDB();
@@ -98,48 +97,38 @@
             if (req.result) {
                 frameBuffers = req.result.buffers;
                 currentDelay = req.result.delay;
-                maxFramesLimit = req.result.limit;
                 document.querySelector(`input[value="${currentDelay}"]`).checked = true;
                 renderList();
-                alert("データを復元しました。");
+                updateStaticPreview();
+                alert("復元しました");
             }
         };
     }
 
-    // モード切り替え
-    function changeMode(delay, limit) {
-        currentDelay = delay;
-        maxFramesLimit = limit;
-        // 制限枚数以上のデータがあればカットする警告
-        const activeCount = frameBuffers.filter((b, i) => b && i >= limit).length;
-        if (activeCount > 0) {
-            if (!confirm(`0.1sモードに変更すると、11枚目以降のデータは無視されます。よろしいですか？`)) {
-                document.querySelector(`input[value="200"]`).checked = true;
-                currentDelay = 200; maxFramesLimit = 20;
-                return;
-            }
-        }
-        renderList();
+    function changeMode(delay) {
+        currentDelay = parseInt(delay);
         saveToDB();
-        startPreview();
+        if (isPlaying) startPreview();
     }
 
     function renderList() {
         const list = document.getElementById('frames-list');
         list.innerHTML = '';
-        for (let i = 0; i < maxFramesLimit; i++) {
+        for (let i = 0; i < MAX_FRAMES; i++) {
             const buf = frameBuffers[i];
             const div = document.createElement('div');
             div.className = 'frame-item';
             const thumbSrc = buf ? arrayBufferToDataURL(buf) : '';
             div.innerHTML = `
                 <span class="frame-info">${i+1}</span>
-                <img src="${thumbSrc}" class="thumb" id="img-${i}" style="${!buf ? 'opacity:0.1' : ''}">
-                <input type="file" accept="image/*" onchange="loadSingle(${i}, this)" style="width:120px; font-size:10px;">
+                <img src="${thumbSrc || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}" class="thumb" style="${!buf ? 'opacity:0.1' : ''}">
+                <div class="file-input-wrapper">
+                    <input type="file" accept="image/*" onchange="loadSingle(${i}, this)">
+                </div>
                 <div class="item-ctrls">
                     <button class="btn-mini" onclick="moveFrame(${i}, -1)">▲</button>
                     <button class="btn-mini" onclick="moveFrame(${i}, 1)">▼</button>
-                    <button class="btn-mini btn-del" onclick="deleteFrame(${i})">消</button>
+                    <button class="btn-mini btn-del" onclick="deleteFrame(${i})">×</button>
                 </div>
             `;
             list.appendChild(div);
@@ -152,12 +141,13 @@
         frameBuffers[i] = await processImage(file);
         renderList();
         saveToDB();
+        updateStaticPreview();
     }
 
     async function handleBulkUpload(input) {
         const files = Array.from(input.files);
         let fIdx = 0;
-        for (let i = 0; i < maxFramesLimit && fIdx < files.length; i++) {
+        for (let i = 0; i < MAX_FRAMES && fIdx < files.length; i++) {
             if (!frameBuffers[i]) {
                 frameBuffers[i] = await processImage(files[fIdx]);
                 fIdx++;
@@ -165,6 +155,7 @@
         }
         renderList();
         saveToDB();
+        updateStaticPreview();
     }
 
     function processImage(file) {
@@ -194,16 +185,20 @@
 
     function moveFrame(i, dir) {
         const target = i + dir;
-        if (target < 0 || target >= maxFramesLimit) return;
+        if (target < 0 || target >= MAX_FRAMES) return;
         [frameBuffers[i], frameBuffers[target]] = [frameBuffers[target], frameBuffers[i]];
         renderList();
         saveToDB();
     }
 
-    function autoFill() {
-        if (!frameBuffers[1] || !frameBuffers[2]) return alert("2枚目と3枚目が必要です");
-        for (let i = 3; i < maxFramesLimit; i++) {
-            frameBuffers[i] = (i % 2 === 1) ? frameBuffers[1] : frameBuffers[2];
+    function smartFill() {
+        const pattern = frameBuffers.filter(b => b !== null);
+        if (pattern.length < 2) return alert("2フレーム以上に画像を配置してください");
+        
+        for (let i = 0; i < MAX_FRAMES; i++) {
+            if (frameBuffers[i] === null) {
+                frameBuffers[i] = pattern[i % pattern.length];
+            }
         }
         renderList();
         saveToDB();
@@ -211,8 +206,10 @@
 
     function togglePreview() {
         isPlaying = !isPlaying;
-        document.getElementById('btn-play-pause').innerText = isPlaying ? "一時停止" : "再生";
-        document.getElementById('play-state-label').innerText = isPlaying ? "再生中" : "停止中";
+        const overlay = document.getElementById('play-state-overlay');
+        overlay.style.opacity = isPlaying ? "0" : "1";
+        overlay.innerText = isPlaying ? "" : "PAUSED";
+        
         if (isPlaying) startPreview();
         else if (previewTimer) clearInterval(previewTimer);
     }
@@ -220,14 +217,19 @@
     function startPreview() {
         if (previewTimer) clearInterval(previewTimer);
         previewTimer = setInterval(() => {
-            if (!isPlaying) return;
-            const active = frameBuffers.slice(0, maxFramesLimit).map((b, i) => b ? i : null).filter(v => v !== null);
+            const active = frameBuffers.map((b, i) => b ? i : null).filter(v => v !== null);
             if (active.length === 0) return;
             currentPreviewIdx = active[(active.indexOf(currentPreviewIdx) + 1) % active.length];
-            if (currentPreviewIdx === undefined || currentPreviewIdx >= maxFramesLimit) currentPreviewIdx = active[0];
-            const idata = new ImageData(new Uint8ClampedArray(frameBuffers[currentPreviewIdx]), 320, 270);
-            mainCtx.putImageData(idata, 0, 0);
+            if (currentPreviewIdx === undefined) currentPreviewIdx = active[0];
+            updateStaticPreview(currentPreviewIdx);
         }, currentDelay); 
+    }
+
+    function updateStaticPreview(idx = null) {
+        const targetIdx = idx !== null ? idx : frameBuffers.findIndex(b => b !== null);
+        if (targetIdx === -1) return;
+        const idata = new ImageData(new Uint8ClampedArray(frameBuffers[targetIdx]), 320, 270);
+        mainCtx.putImageData(idata, 0, 0);
     }
 
     function arrayBufferToDataURL(buf) {
@@ -238,9 +240,8 @@
     }
 
     function saveForLine() {
-        const active = frameBuffers.slice(0, maxFramesLimit).filter(b => b !== null);
-        if (active.length < 5) return alert("最低5フレーム必要です。");
-        
+        const active = frameBuffers.filter(b => b !== null);
+        if (active.length < 5) return alert("最低5フレーム必要です");
         const apng = UPNG.encode(active, 320, 270, 0, new Array(active.length).fill(currentDelay));
         const view = new DataView(apng);
         let offset = 8;
@@ -251,12 +252,11 @@
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([apng], {type: 'image/png'}));
-        a.download = `line_${active.length}f_${currentDelay}ms.png`;
+        a.download = `line_${active.length}f_${(active.length*currentDelay)/1000}s.png`;
         a.click();
     }
 
     renderList();
-    startPreview();
 </script>
 </body>
 </html>
