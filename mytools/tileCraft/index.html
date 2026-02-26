@@ -28,10 +28,9 @@
         .btn:disabled { background-color: #334155; color: #64748b; cursor: not-allowed; }
         .btn-save-all { background-color: var(--blue); color: white; display: none; }
         
-        /* 9分割プレビューグリッド */
         .grid-container { 
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px; 
-            width: 100%; display: none; /* 初期状態は非表示 */
+            width: 100%; display: none;
         }
         .tile-wrapper { 
             position: relative; border-radius: 8px; overflow: hidden; border: 1px solid #334155;
@@ -52,19 +51,19 @@
 
 <div class="header">
     <h1>TileCraft</h1>
-    <p>MOBILE ALPHA INTERACTIVE</p>
+    <p>180PX ALPHA MASTER</p>
 </div>
 
 <div class="card">
-    <div class="section-header"><span>🧩</span> 結合ユニット</div>
+    <div class="section-header"><span>🧩</span> 結合ユニット (540x540)</div>
     <input type="file" id="joinInput" accept="image/png" multiple>
-    <button id="joinGenBtn" class="btn" disabled>9枚を結合</button>
+    <button id="joinGenBtn" class="btn" disabled>9枚を結合 (540px)</button>
 </div>
 
 <div class="card">
-    <div class="section-header"><span>✂️</span> 分割ユニット</div>
+    <div class="section-header"><span>✂️</span> 分割ユニット (180pxタイル)</div>
     <input type="file" id="splitInput" accept="image/png">
-    <button id="splitGenBtn" class="btn" disabled>リサイズして9分割</button>
+    <button id="splitGenBtn" class="btn" disabled>リサイズ分割実行</button>
     <div id="splitStatus" class="status-msg"></div>
     
     <div id="gridPreview" class="grid-container"></div>
@@ -75,7 +74,8 @@
 <canvas id="mainCanvas"></canvas>
 
 <script>
-    const TILE = 120, GRID = 3, TARGET_SIZE = TILE * GRID;
+    // --- 180px基準に設定変更 ---
+    const TILE = 180, GRID = 3, TARGET_SIZE = TILE * GRID; // 540px
     const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d', { alpha: true });
     
     function loadImg(f) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = URL.createObjectURL(f); }); }
@@ -88,12 +88,13 @@
         ctx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
         for (let i = 0; i < 9; i++) {
             const img = await loadImg(jIn.files[i]);
+            // 180pxずつずらして描画
             ctx.drawImage(img, (i % GRID) * TILE, Math.floor(i / GRID) * TILE, TILE, TILE);
         }
-        const a = document.createElement('a'); a.download = 'TileCraft_joined.png'; a.href = canvas.toDataURL('image/png'); a.click();
+        const a = document.createElement('a'); a.download = 'TileCraft_540.png'; a.href = canvas.toDataURL('image/png'); a.click();
     };
 
-    // --- 分割処理 (グリッド展開) ---
+    // --- 分割処理 ---
     const sIn = document.getElementById('splitInput'), sBtn = document.getElementById('splitGenBtn');
     const gridPreview = document.getElementById('gridPreview');
     const splitDownloadBtn = document.getElementById('splitDownloadBtn');
@@ -103,29 +104,27 @@
         sBtn.disabled = !sIn.files.length;
         gridPreview.style.display = 'none';
         splitDownloadBtn.style.display = 'none';
-        document.getElementById('splitStatus').textContent = "";
     };
 
     sBtn.onclick = async () => {
         const originalImg = await loadImg(sIn.files[0]);
         const status = document.getElementById('splitStatus');
         
+        // 540x540にリサイズ
         const resizeCanvas = document.createElement('canvas');
         resizeCanvas.width = resizeCanvas.height = TARGET_SIZE;
         const rCtx = resizeCanvas.getContext('2d', { alpha: true });
         rCtx.clearRect(0, 0, TARGET_SIZE, TARGET_SIZE);
         rCtx.drawImage(originalImg, 0, 0, TARGET_SIZE, TARGET_SIZE);
         
-        if (originalImg.width !== TARGET_SIZE) {
-            status.textContent = `リサイズ完了 (360px)`;
-        }
+        status.textContent = `リサイズ: 540x540 (各180px)`;
 
         tiles = [];
-        gridPreview.innerHTML = ""; // クリア
+        gridPreview.innerHTML = "";
         
         for (let i = 0; i < 9; i++) {
             const tCanvas = document.createElement('canvas');
-            tCanvas.width = tCanvas.height = TILE;
+            tCanvas.width = tCanvas.height = TILE; // 180px
             const tCtx = tCanvas.getContext('2d', { alpha: true });
             tCtx.clearRect(0, 0, TILE, TILE);
             tCtx.drawImage(resizeCanvas, (i % GRID) * TILE, Math.floor(i / GRID) * TILE, TILE, TILE, 0, 0, TILE, TILE);
@@ -133,14 +132,13 @@
             const dataUrl = tCanvas.toDataURL('image/png');
             tiles.push(dataUrl);
 
-            // プレビュー用要素の作成
             const wrapper = document.createElement('div');
             wrapper.className = 'tile-wrapper';
             const img = document.createElement('img');
             img.src = dataUrl;
             img.onclick = () => {
                 const a = document.createElement('a');
-                a.download = `tile_${i+1}.png`;
+                a.download = `tile180_${i+1}.png`;
                 a.href = dataUrl;
                 a.click();
             };
@@ -154,7 +152,7 @@
 
     splitDownloadBtn.onclick = async () => {
         for (let i = 0; i < tiles.length; i++) {
-            const a = document.createElement('a'); a.download = `tile_${i+1}.png`; a.href = tiles[i]; a.click();
+            const a = document.createElement('a'); a.download = `tile180_${i+1}.png`; a.href = tiles[i]; a.click();
             await new Promise(r => setTimeout(r, 600));
         }
     };
