@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TileCraft - Precision Alpha Edition</title>
+    <style>
+        :root { --accent: #2dd4bf; --accent-hover: #14b8a6; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 40px 20px; min-height: 100vh; margin: 0; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { margin: 0; font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #2dd4bf, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header p { font-size: 0.9rem; color: #94a3b8; margin-top: 8px; letter-spacing: 0.1em; }
+        .card { background: var(--card); width: 100%; max-width: 500px; border-radius: 20px; border: 1px solid #334155; padding: 28px; margin-bottom: 24px; box-sizing: border-box; }
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-weight: 600; color: #e2e8f0; }
+        .section-header span { font-size: 1.2rem; }
+        .btn { background-color: var(--accent); color: #0f172a; border: none; width: 100%; height: 50px; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; margin-top: 15px; }
+        .btn:hover { background-color: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(45, 212, 191, 0.3); }
+        .btn:disabled { background-color: #334155; color: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-save { background-color: #3b82f6; color: white; display: none; }
+        .btn-save:hover { background-color: #2563eb; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .preview-area { 
+            margin-top: 20px; border: 2px dashed #334155; border-radius: 14px; padding: 16px; 
+            background-image: conic-gradient(#1e293b 0.25turn, #263345 0.25turn 0.5turn, #1e293b 0.5turn 0.75turn, #263345 0.75turn);
+            background-size: 20px 20px; text-align: center;
+        }
+        .preview-img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 0 auto; }
+        input[type="file"] { font-size: 0.85rem; color: #94a3b8; width: 100%; cursor: pointer; }
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>TileCraft</h1>
+    <p>PRECISION ALPHA PROCESSOR</p>
+</div>
+
+<div class="card">
+    <div class="section-header"><span>🧱</span> JOIN UNIT</div>
+    <input type="file" id="joinInput" accept="image/png" multiple>
+    <button id="joinGenBtn" class="btn" disabled>透過タイルを結合</button>
+    <div class="preview-area" id="joinPreviewArea"></div>
+    <button id="joinDownloadBtn" class="btn btn-save">結合画像をエクスポート</button>
+</div>
+
+<div class="card">
+    <div class="section-header"><span>✂️</span> SPLIT UNIT</div>
+    <input type="file" id="splitInput" accept="image/png">
+    <button id="splitGenBtn" class="btn" disabled>透過のまま9分割</button>
+    <div class="preview-area" id="splitPreviewArea"></div>
+    <button id="splitDownloadBtn" class="btn btn-save">全タイルを一括保存</button>
+</div>
+
+<canvas id="mainCanvas"></canvas>
+
+<script>
+    const TILE = 120, GRID = 3, canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d', { alpha: true });
+    function loadImg(f) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = URL.createObjectURL(f); }); }
+
+    // --- Join Logic ---
+    const jIn = document.getElementById('joinInput'), jBtn = document.getElementById('joinGenBtn');
+    jIn.onchange = () => jBtn.disabled = jIn.files.length < 9;
+    jBtn.onclick = async () => {
+        canvas.width = canvas.height = TILE * GRID;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < 9; i++) {
+            const img = await loadImg(jIn.files[i]);
+            ctx.drawImage(img, (i % GRID) * TILE, Math.floor(i / GRID) * TILE, TILE, TILE);
+        }
+        document.getElementById('joinPreviewArea').innerHTML = `<img src="${canvas.toDataURL('image/png')}" class="preview-img">`;
+        document.getElementById('joinDownloadBtn').style.display = 'block';
+    };
+    document.getElementById('joinDownloadBtn').onclick = () => {
+        const a = document.createElement('a'); a.download = 'TileCraft_combined.png'; a.href = canvas.toDataURL('image/png'); a.click();
+    };
+
+    // --- Split Logic ---
+    const sIn = document.getElementById('splitInput'), sBtn = document.getElementById('splitGenBtn');
+    let tiles = [];
+    sIn.onchange = () => sBtn.disabled = !sIn.files.length;
+    sBtn.onclick = async () => {
+        const img = await loadImg(sIn.files[0]);
+        tiles = [];
+        for (let i = 0; i < 9; i++) {
+            const tCanvas = document.createElement('canvas');
+            tCanvas.width = tCanvas.height = TILE;
+            const tCtx = tCanvas.getContext('2d', { alpha: true });
+            tCtx.clearRect(0, 0, TILE, TILE);
+            tCtx.drawImage(img, (i % GRID) * TILE, Math.floor(i / GRID) * TILE, TILE, TILE, 0, 0, TILE, TILE);
+            tiles.push(tCanvas.toDataURL('image/png'));
+        }
+        document.getElementById('splitPreviewArea').innerHTML = `<img src="${tiles[0]}" class="preview-img">`;
+        document.getElementById('splitDownloadBtn').style.display = 'block';
+    };
+    document.getElementById('splitDownloadBtn').onclick = async () => {
+        for (let i = 0; i < tiles.length; i++) {
+            const a = document.createElement('a'); a.download = `tile_${i+1}.png`; a.href = tiles[i]; a.click();
+            await new Promise(r => setTimeout(r, 450));
+        }
+    };
+</script>
+</body>
+</html>
