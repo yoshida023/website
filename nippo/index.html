@@ -66,7 +66,9 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             min-height: 65px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             cursor: pointer;
+            transition: opacity 0.2s;
         }
+        .btn-action:disabled { opacity: 0.6; cursor: not-allowed; }
         .stamp-time { font-size: 11px; font-weight: normal; margin-top: 4px; opacity: 0.9; }
 
         .remote-toggle {
@@ -123,8 +125,8 @@
     <div class="main-content">
         <div class="notice-section">
             <div class="form-group">
-                <span class="sub-label">APIアクセストークン：</span>
-                <input type="password" id="api-token" placeholder="xoxp-xxxx" value="">
+                <span class="sub-label">Slack API Token:</span>
+                <input type="password" id="api-token" value="xoxp-xxxx">
             </div>
         </div>
 
@@ -132,9 +134,9 @@
             <h2>本日のアクション</h2>
             
             <div class="action-btns-row">
-                <button class="btn-action" onclick="stamp(this)"><span>出勤</span><span class="stamp-time">--:--</span></button>
-                <button class="btn-action" onclick="stamp(this)"><span>休憩入</span><span class="stamp-time">--:--</span></button>
-                <button class="btn-action" onclick="stamp(this)"><span>休憩戻</span><span class="stamp-time">--:--</span></button>
+                <button class="btn-action" onclick="handleStamp(this, ':開始:')"><span>出勤</span><span class="stamp-time">--:--</span></button>
+                <button class="btn-action" onclick="handleStamp(this, ':休憩入:')"><span>休憩入</span><span class="stamp-time">--:--</span></button>
+                <button class="btn-action" onclick="handleStamp(this, ':休憩戻:')"><span>休憩戻</span><span class="stamp-time">--:--</span></button>
                 
                 <div class="remote-toggle" onclick="toggleRemote(this)">
                     <span>在宅勤務</span>
@@ -178,7 +180,7 @@
 
             <div class="submit-area">
                 <button class="btn-large btn-sub" onclick="alert('下書きを保存しました')">下書き</button>
-                <button class="btn-large btn-main" onclick="stampSubmit(this)">
+                <button class="btn-large btn-main" onclick="handleStamp(this, ':終了:')">
                     <span>退勤（日報送信）</span>
                     <span class="stamp-time" style="font-size:13px;">--:--</span>
                 </button>
@@ -188,7 +190,8 @@
 </div>
 
 <script>
-    // 日付表示
+    const SLACK_CHANNEL = "#1905_勤怠連絡_5g";
+
     function updateDate() {
         const now = new Date();
         const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
@@ -196,55 +199,82 @@
     }
     updateDate();
 
-    // 在宅トグル
+    // 在宅フラグの状態を管理
+    let isRemoteActive = false;
+
     function toggleRemote(el) {
         const icon = el.querySelector('i');
-        const isRemote = icon.classList.contains('fa-toggle-off');
-        if (isRemote) {
+        if (icon.classList.contains('fa-toggle-off')) {
             icon.classList.replace('fa-toggle-off', 'fa-toggle-on');
             icon.style.color = "var(--ok-green)";
+            isRemoteActive = true;
         } else {
             icon.classList.replace('fa-toggle-on', 'fa-toggle-off');
             icon.style.color = "#ccc";
+            isRemoteActive = false;
         }
     }
 
-    // カウンター
     function changeCount(val) {
         const input = document.getElementById('project-count');
         let current = parseInt(input.value);
         if (current + val >= 0) input.value = current + val;
     }
 
-    // 打刻
-    function stamp(button) {
-        const timeSpan = button.querySelector('.stamp-time');
+    async function handleStamp(button, slackText) {
+        const token = document.getElementById('api-token').value;
+        if(!token) {
+            alert("APIトークンを入力してください");
+            return;
+        }
+
         const currentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-        timeSpan.innerText = currentTime;
+        const timeSpan = button.querySelector('.stamp-time');
+        
+        button.disabled = true;
         button.style.backgroundColor = "var(--active-blue)";
+
+        // 【修正ポイント】在宅勤務がONの場合のみSlack送信を実行
+        if (isRemoteActive) {
+            const success = await sendToSlack(token, slackText);
+            if (!success) {
+                alert("Slackへの送信に失敗しました。");
+                button.disabled = false;
+                button.style.backgroundColor = "var(--primary-blue)";
+                timeSpan.innerText = "--:--";
+                return;
+            }
+        } else {
+            console.log("在宅勤務がOFFのため、Slack送信をスキップしました。");
+        }
+
+        // 画面上の打刻表示は在宅のON/OFFに関わらず更新
+        timeSpan.innerText = (slackText === ':終了:' ? "打刻 " : "") + currentTime;
+        if (slackText === ':終了:') {
+            alert("退勤処理を完了しました。" + (isRemoteActive ? "\nSlackへ日報を送信しました。" : "\n(在宅OFFのためSlack送信はスキップ)"));
+        }
     }
 
-    // 送信処理のシミュレーション
-    function stampSubmit(button) {
-        const timeSpan = button.querySelector('.stamp-time');
-        const currentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-        
-        // データの収集
-        const reportData = {
-            task: document.getElementById('task-name').value,
-            project: document.getElementById('project-name').value,
-            status: document.querySelector('input[name="status"]:checked').value,
-            count: document.getElementById('project-count').value,
-            time: currentTime
-        };
+    async function sendToSlack(token, text) {
+        const url = "https://slack.com/api/chat.postMessage";
+        const payload = { channel: SLACK_CHANNEL, text: text };
 
-        console.log("送信データ:", reportData);
-        
-        timeSpan.innerText = "打刻 " + currentTime;
-        button.style.backgroundColor = "var(--active-blue)";
-        alert(`【${reportData.project}】の日報を送信し、退勤処理（${currentTime}）を行いました。`);
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json; charset=utf-8'
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            return data.ok;
+        } catch (error) {
+            console.error("Error:", error);
+            return false;
+        }
     }
 </script>
-
 </body>
 </html>
