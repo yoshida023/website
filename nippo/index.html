@@ -126,7 +126,7 @@
         <div class="notice-section">
             <div class="form-group">
                 <span class="sub-label">Slack API Token:</span>
-                <input type="password" id="api-token" value="xoxp-xxxx">
+                <input type="password" id="api-token" value="xoxp-xxxxx">
             </div>
         </div>
 
@@ -191,6 +191,7 @@
 
 <script>
     const SLACK_CHANNEL = "#1905_勤怠連絡_5g";
+    let isRemoteActive = false;
 
     function updateDate() {
         const now = new Date();
@@ -198,9 +199,6 @@
         document.getElementById('current-date').innerText = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}(${dayOfWeek})`;
     }
     updateDate();
-
-    // 在宅フラグの状態を管理
-    let isRemoteActive = false;
 
     function toggleRemote(el) {
         const icon = el.querySelector('i');
@@ -222,8 +220,8 @@
     }
 
     async function handleStamp(button, slackText) {
-        const token = document.getElementById('api-token').value;
-        if(!token) {
+        const tokenInput = document.getElementById('api-token').value.trim();
+        if(!tokenInput) {
             alert("APIトークンを入力してください");
             return;
         }
@@ -234,44 +232,52 @@
         button.disabled = true;
         button.style.backgroundColor = "var(--active-blue)";
 
-        // 【修正ポイント】在宅勤務がONの場合のみSlack送信を実行
         if (isRemoteActive) {
-            const success = await sendToSlack(token, slackText);
+            const success = await sendToSlack(tokenInput, slackText);
             if (!success) {
-                alert("Slackへの送信に失敗しました。");
+                // 失敗した場合
+                alert("Slackへの送信に失敗しました。以下の点を確認してください：\n1. トークンの権限\n2. チャンネル名が正しいか\n3. ブラウザのCORS制限");
                 button.disabled = false;
                 button.style.backgroundColor = "var(--primary-blue)";
-                timeSpan.innerText = "--:--";
                 return;
             }
-        } else {
-            console.log("在宅勤務がOFFのため、Slack送信をスキップしました。");
         }
 
-        // 画面上の打刻表示は在宅のON/OFFに関わらず更新
         timeSpan.innerText = (slackText === ':終了:' ? "打刻 " : "") + currentTime;
         if (slackText === ':終了:') {
-            alert("退勤処理を完了しました。" + (isRemoteActive ? "\nSlackへ日報を送信しました。" : "\n(在宅OFFのためSlack送信はスキップ)"));
+            alert("処理を完了しました。");
         }
     }
 
     async function sendToSlack(token, text) {
         const url = "https://slack.com/api/chat.postMessage";
-        const payload = { channel: SLACK_CHANNEL, text: text };
+        
+        // JSON形式で失敗する場合の対策として、互換性の高い送信パラメータを作成
+        const formData = new URLSearchParams();
+        formData.append('channel', SLACK_CHANNEL);
+        formData.append('text', text);
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json; charset=utf-8'
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: JSON.stringify(payload)
+                body: formData
             });
+
             const data = await response.json();
-            return data.ok;
+            
+            if (!data.ok) {
+                console.error("Slack API Error Details:", data.error);
+                // トークンが無効な場合は 'invalid_auth'、チャンネルが見つからない場合は 'channel_not_found' などが出る
+                alert("Slackエラー: " + data.error);
+                return false;
+            }
+            return true;
         } catch (error) {
-            console.error("Error:", error);
+            console.error("Network or CORS Error:", error);
             return false;
         }
     }
