@@ -293,6 +293,14 @@
             let message = slackText;
             let targetChannel = kintaiChannel; // デフォルトは選択された勤怠チャンネル
 
+            const success = await sendToSlackViaGAS(token, targetChannel, message);
+            if (!success) {
+                alert("Slackへの送信に失敗しました。");
+                button.disabled = false;
+                button.style.backgroundColor = "var(--primary-blue)";
+                return;
+            }
+/*
             if (slackText === ':終了:') {
                 targetChannel = REPORT_CHANNEL; // 退勤時は「#日報」固定
                 const task = document.getElementById('task-name').value;
@@ -314,6 +322,7 @@
                 button.style.backgroundColor = "var(--primary-blue)";
                 return;
             }
+*/
         }
 
         timeSpan.innerText = (slackText === ':終了:' ? "打刻 " : "") + currentTime;
