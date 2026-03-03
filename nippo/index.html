@@ -292,14 +292,6 @@
             
             let message = slackText;
             let targetChannel = kintaiChannel; // デフォルトは選択された勤怠チャンネル
-
-            const success = await sendToSlackViaGAS(token, targetChannel, message);
-            if (!success) {
-                alert("Slackへの送信に失敗しました。");
-                button.disabled = false;
-                button.style.backgroundColor = "var(--primary-blue)";
-                return;
-            }
 /*
             if (slackText === ':終了:') {
                 targetChannel = REPORT_CHANNEL; // 退勤時は「#日報」固定
@@ -314,7 +306,7 @@
 
                 message = `:終了: 【退勤・日報】\n---------------------------\n■業務内容: ${task}\n■案件名: ${project}\n■フェーズ: ${phase}\n■進捗状況: ${status} (${statusDetail})\n■担当案件数: ${count}\n■問題点: ${issue}\n■備考: ${note}\n---------------------------`;
             }
-            
+*/
             const success = await sendToSlackViaGAS(token, targetChannel, message);
             if (!success) {
                 alert("Slackへの送信に失敗しました。");
@@ -322,7 +314,6 @@
                 button.style.backgroundColor = "var(--primary-blue)";
                 return;
             }
-*/
         }
 
         timeSpan.innerText = (slackText === ':終了:' ? "打刻 " : "") + currentTime;
