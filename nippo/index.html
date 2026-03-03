@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日報統合システム - preBuild for hp2025</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-blue: #3b82f6;
+            --active-blue: #1d4ed8;
+            --light-blue: #e0efff;
+            --border-color: #d1d5db;
+            --draft-gray: #6b7280;
+            --ok-green: #52c41a;
+            --ng-red: #ff4d4f;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            background-color: white;
+            min-height: 100vh;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+
+        header { background-color: var(--light-blue); padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .logo-area { font-weight: bold; font-size: 20px; color: #1a365d; display: flex; align-items: center; }
+        
+        .main-content { padding: 15px; }
+
+        .notice-section {
+            background-color: #fffbe6;
+            border: 1px solid #ffe58f;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .section-box {
+            background-color: #f1f7ff;
+            border-radius: 12px;
+            padding: 18px;
+            border: 1px solid #cce0ff;
+            margin-bottom: 20px;
+        }
+
+        h2 { font-size: 18px; margin: 0 0 15px 0; color: #333; border-left: 4px solid var(--primary-blue); padding-left: 8px; }
+        .today-date { font-size: 14px; color: #555; font-weight: bold; }
+
+        .action-btns-row { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; }
+        
+        .btn-action {
+            background-color: var(--primary-blue);
+            color: white; border: none; border-radius: 10px;
+            flex: 1; font-weight: bold;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 65px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+        .stamp-time { font-size: 11px; font-weight: normal; margin-top: 4px; opacity: 0.9; }
+
+        .remote-toggle {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 65px;
+            gap: 5px;
+            cursor: pointer;
+        }
+        .remote-toggle span { font-size: 10px; font-weight: bold; color: #666; }
+
+        .status-selector { display: flex; gap: 10px; margin-bottom: 15px; }
+        .status-option { flex: 1; position: relative; }
+        .status-option input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+        .status-label {
+            display: flex; align-items: center; justify-content: center; padding: 12px;
+            border: 2px solid var(--border-color); border-radius: 10px; background: white;
+            font-weight: bold; color: #666; text-align: center;
+        }
+        .status-option input:checked + .status-label.status-ok { border-color: var(--ok-green); color: var(--ok-green); background: #f6ffed; }
+        .status-option input:checked + .status-label.status-ng { border-color: var(--ng-red); color: var(--ng-red); background: #fff1f0; }
+
+        .counter-container { display: flex; align-items: center; background: white; border: 1px solid var(--border-color); border-radius: 8px; width: fit-content; }
+        .counter-btn { background: #f8f9fa; border: none; padding: 10px 18px; font-size: 20px; font-weight: bold; cursor: pointer; }
+        .counter-input { width: 45px; border: none; text-align: center; font-size: 18px; font-weight: bold; }
+
+        .form-group { margin-bottom: 15px; }
+        .sub-label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: bold; }
+        input[type="text"], input[type="password"], select, textarea {
+            width: 100%; padding: 12px; border: 1px solid var(--border-color);
+            border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;
+        }
+
+        .submit-area { display: flex; gap: 12px; margin-top: 25px; }
+        .btn-large {
+            border: none; padding: 16px; border-radius: 10px; font-size: 16px; font-weight: bold;
+            display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1;
+            cursor: pointer;
+        }
+        .btn-main { background-color: var(--primary-blue); color: white; flex: 2; }
+        .btn-sub { background-color: var(--draft-gray); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="logo-area">preBuild for hp2025</div>
+        <div id="current-date" class="today-date"></div>
+    </header>
+
+    <div class="main-content">
+        <div class="notice-section">
+            <div class="form-group">
+                <span class="sub-label">APIアクセストークン：</span>
+                <input type="password" id="api-token" placeholder="xoxp-xxxx" value="">
+            </div>
+        </div>
+
+        <div class="section-box">
+            <h2>本日のアクション</h2>
+            
+            <div class="action-btns-row">
+                <button class="btn-action" onclick="stamp(this)"><span>出勤</span><span class="stamp-time">--:--</span></button>
+                <button class="btn-action" onclick="stamp(this)"><span>休憩入</span><span class="stamp-time">--:--</span></button>
+                <button class="btn-action" onclick="stamp(this)"><span>休憩戻</span><span class="stamp-time">--:--</span></button>
+                
+                <div class="remote-toggle" onclick="toggleRemote(this)">
+                    <span>在宅勤務</span>
+                    <i id="remote-icon" class="fa-solid fa-toggle-off fa-2x" style="color:#ccc;"></i>
+                </div>
+            </div>
+
+            <h2 style="margin-top:10px;">今日の日報</h2>
+            
+            <div class="form-group"><span class="sub-label">担当業務</span><input type="text" id="task-name" value="在庫管理システム改修"></div>
+            <div class="form-group"><span class="sub-label">案件名</span><input type="text" id="project-name" value="社内ポータル"></div>
+            <div class="form-group">
+                <span class="sub-label">開発フェーズ</span>
+                <select id="phase"><option>詳細設計</option><option>実装</option><option>テスト</option></select>
+            </div>
+
+            <div class="status-selector">
+                <div class="status-option">
+                    <input type="radio" name="status" id="st-ok" value="順調">
+                    <label for="st-ok" class="status-label status-ok">順調</label>
+                </div>
+                <div class="status-option">
+                    <input type="radio" name="status" id="st-ng" value="遅延" checked>
+                    <label for="st-ng" class="status-label status-ng">遅延</label>
+                </div>
+            </div>
+
+            <div class="form-group"><input type="text" id="status-detail" placeholder="見通しを入力..."></div>
+
+            <div class="form-group">
+                <span class="sub-label">担当案件数</span>
+                <div class="counter-container">
+                    <button class="counter-btn" onclick="changeCount(-1)">－</button>
+                    <input type="number" id="project-count" class="counter-input" value="1" readonly>
+                    <button class="counter-btn" onclick="changeCount(1)">＋</button>
+                </div>
+            </div>
+
+            <div class="form-group"><span class="sub-label">問題点</span><textarea id="issue" rows="2" placeholder="課題や問題を記入"></textarea></div>
+            <div class="form-group"><span class="sub-label">備考</span><textarea id="note" rows="2" placeholder="特記事項なし"></textarea></div>
+
+            <div class="submit-area">
+                <button class="btn-large btn-sub" onclick="alert('下書きを保存しました')">下書き</button>
+                <button class="btn-large btn-main" onclick="stampSubmit(this)">
+                    <span>退勤（日報送信）</span>
+                    <span class="stamp-time" style="font-size:13px;">--:--</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 日付表示
+    function updateDate() {
+        const now = new Date();
+        const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
+        document.getElementById('current-date').innerText = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}(${dayOfWeek})`;
+    }
+    updateDate();
+
+    // 在宅トグル
+    function toggleRemote(el) {
+        const icon = el.querySelector('i');
+        const isRemote = icon.classList.contains('fa-toggle-off');
+        if (isRemote) {
+            icon.classList.replace('fa-toggle-off', 'fa-toggle-on');
+            icon.style.color = "var(--ok-green)";
+        } else {
+            icon.classList.replace('fa-toggle-on', 'fa-toggle-off');
+            icon.style.color = "#ccc";
+        }
+    }
+
+    // カウンター
+    function changeCount(val) {
+        const input = document.getElementById('project-count');
+        let current = parseInt(input.value);
+        if (current + val >= 0) input.value = current + val;
+    }
+
+    // 打刻
+    function stamp(button) {
+        const timeSpan = button.querySelector('.stamp-time');
+        const currentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        timeSpan.innerText = currentTime;
+        button.style.backgroundColor = "var(--active-blue)";
+    }
+
+    // 送信処理のシミュレーション
+    function stampSubmit(button) {
+        const timeSpan = button.querySelector('.stamp-time');
+        const currentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        
+        // データの収集
+        const reportData = {
+            task: document.getElementById('task-name').value,
+            project: document.getElementById('project-name').value,
+            status: document.querySelector('input[name="status"]:checked').value,
+            count: document.getElementById('project-count').value,
+            time: currentTime
+        };
+
+        console.log("送信データ:", reportData);
+        
+        timeSpan.innerText = "打刻 " + currentTime;
+        button.style.backgroundColor = "var(--active-blue)";
+        alert(`【${reportData.project}】の日報を送信し、退勤処理（${currentTime}）を行いました。`);
+    }
+</script>
+
+</body>
+</html>
