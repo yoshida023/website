@@ -10,23 +10,23 @@ export const VIDEO_CONFIG = {
     codec: 'avc1.42E01E' 
 };
 
-// --- 1行で収まるようにフォントサイズを調整して描画するヘルパー ---
-function fillSingleLineTextCenter(ctx, text, x, y, maxWidth, initialFontSize) {
+// --- 【修正】絶対に改行せず、幅に収まるまで縮小する関数 ---
+function fillSingleLineTextAutoFit(ctx, text, x, y, maxWidth, fontSize) {
     ctx.save();
-    let fontSize = initialFontSize;
-    ctx.font = `bold ${fontSize}px sans-serif`;
+    let currentSize = fontSize;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-
-    // 幅に収まるまでサイズを下げる（最小12pxまで）
-    while (ctx.measureText(text).width > maxWidth && fontSize > 12) {
-        fontSize -= 1;
-        ctx.font = `bold ${fontSize}px sans-serif`;
-    }
+    
+    // 幅に収まるまでサイズを1pxずつ下げる
+    do {
+        ctx.font = `bold ${currentSize}px sans-serif`;
+        if (ctx.measureText(text).width <= maxWidth || currentSize <= 10) break;
+        currentSize -= 1;
+    } while (currentSize > 10);
 
     ctx.fillText(text, x, y);
     ctx.restore();
-    return fontSize * 1.3; // 占有した高さを返す
+    return currentSize * 1.3; // 使用した高さを返す
 }
 
 export async function generateStampVideo(params, onProgress) {
@@ -144,12 +144,12 @@ function drawUI(ctx, p) {
         currentY += size + 25; 
     }
 
-    // 2. タイトル (1行固定・自動縮小)
+    // 2. タイトル (絶対に1行・自動縮小)
     ctx.fillStyle = p.textColor;
-    const titleHeight = fillSingleLineTextCenter(ctx, p.title, W / 2, currentY, 480, 32);
-    currentY += titleHeight + 5; 
+    const titleLineHeight = fillSingleLineTextAutoFit(ctx, p.title, W / 2, currentY, 480, 34);
+    currentY += titleLineHeight + 5; 
 
-    // 3. 作者名 (1行)
+    // 3. 作者名
     ctx.save();
     ctx.font = "20px sans-serif";
     ctx.textAlign = "center";
@@ -167,7 +167,7 @@ function drawUI(ctx, p) {
     ctx.fillText(p.footer, W / 2, H - 80);
     ctx.restore();
 
-    // 5. スタンプエリア
+    // 5. スタンプ表示エリア
     const cardSize = 420;
     const cardX = (W - cardSize) / 2;
     const cardY = 320; 
