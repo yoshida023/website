@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Encoding Fix</title>
+    <title>preBuild for hp2025 - Save Button Added</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
@@ -17,17 +17,25 @@
         button:disabled { background: #ccc; }
         #status { font-size: 13px; margin-top: 10px; color: #333; text-align: center; min-height: 1.5em; }
         progress { width: 100%; height: 8px; margin-top: 5px; }
-        video { width: 100%; border-radius: 8px; background: #000; display: none; margin-top: 15px; }
-        .ios-hint { font-size: 11px; color: #888; margin-top: 8px; display: none; padding: 10px; background: #fff3cd; border-radius: 6px; border: 1px solid #ffeeba; }
+        
+        #downloadArea { margin-top: 20px; text-align: center; width: 100%; display: none; }
+        video { width: 100%; border-radius: 8px; background: #000; margin-bottom: 15px; }
+        .save-button { 
+            display: block; width: 100%; padding: 18px; background: #007bff; color: white; 
+            text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 18px; 
+            box-shadow: 0 4px 0 #0056b3; transition: transform 0.1s;
+        }
+        .save-button:active { transform: translateY(4px); box-shadow: none; }
+        .ios-instruction { font-size: 12px; color: #d9534f; margin-top: 12px; text-align: left; background: #fff5f5; padding: 10px; border-radius: 6px; }
         canvas { display: none; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (タスクエラー修正)</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
-        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
+        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="ヨシダスタジオ"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
         <div class="input-group"><label>メイン画像 (ZIP内main.png優先)</label><input type="file" id="mainImgInput" accept="image/*"></div>
         <div class="input-group"><label>スタンプZIP</label><input type="file" id="zipInput" accept=".zip"></div>
@@ -43,8 +51,11 @@
         
         <div id="downloadArea">
             <video id="resultVideo" controls playsinline></video>
-            <div id="iosHint" class="ios-hint">✅ 生成完了！動画を長押しして「ビデオを保存」をタップしてください。</div>
-            <div id="linkArea"></div>
+            <a id="saveLink" class="save-button">📥 動画をカメラロールに保存</a>
+            <div class="ios-instruction">
+                <strong>iPhoneの方へ：</strong><br>
+                ボタンを押すと動画が開きます。その後、画面下の<strong>「共有ボタン（四角に↑）」</strong>を押し、<strong>「ビデオを保存」</strong>を選択してください。
+            </div>
         </div>
     </div>
 
@@ -54,7 +65,6 @@
         import parseAPNG from 'https://cdn.skypack.dev/apng-js';
         import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
 
-        // 互換性のために16の倍数に調整 (544 x 960)
         const VIDEO_W = 544; 
         const VIDEO_H = 960;
         const canvas = document.getElementById('exportCanvas');
@@ -65,8 +75,9 @@
         const generateBtn = document.getElementById('generateBtn');
         const status = document.getElementById('status');
         const progress = document.getElementById('progress');
+        const downloadArea = document.getElementById('downloadArea');
         const resultVideo = document.getElementById('resultVideo');
-        const iosHint = document.getElementById('iosHint');
+        const saveLink = document.getElementById('saveLink');
 
         async function getRenderedFrames(buffer) {
             try {
@@ -75,17 +86,15 @@
                 await apng.createImages();
                 const renderedFrames = [];
                 const workCanvas = document.createElement('canvas');
-                workCanvas.width = apng.width;
-                workCanvas.height = apng.height;
+                workCanvas.width = apng.width; workCanvas.height = apng.height;
                 const workCtx = workCanvas.getContext('2d');
                 apng.frames.forEach((frame) => {
-                    if (frame.disposeOp === 1) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
-                    if (frame.blendOp === 0) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+                    if (frame.disposeOp === 1 || frame.blendOp === 0) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
                     workCtx.drawImage(frame.imageElement, frame.left, frame.top);
                     const snapshot = document.createElement('canvas');
                     snapshot.width = apng.width; snapshot.height = apng.height;
                     snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
-                    renderedFrames.push({ img: snapshot, delay: frame.delay, width: apng.width, height: apng.height });
+                    renderedFrames.push({ img: snapshot, delay: frame.delay });
                 });
                 return renderedFrames;
             } catch (e) { return null; }
@@ -112,11 +121,7 @@
                 ctx.restore();
             }
             ctx.fillStyle = textColor; ctx.textAlign = "left";
-            let titleFontSize = 28;
-            ctx.font = `bold ${titleFontSize}px sans-serif`;
-            while (ctx.measureText(title).width > 340 && titleFontSize > 12) {
-                titleFontSize--; ctx.font = `bold ${titleFontSize}px sans-serif`;
-            }
+            ctx.font = `bold 28px sans-serif`;
             ctx.fillText(title, 160, 105);
             ctx.font = "20px sans-serif"; ctx.fillText(author, 160, 140);
             ctx.textAlign = "center"; ctx.font = "bold 32px sans-serif";
@@ -130,23 +135,20 @@
 
             try {
                 generateBtn.disabled = true;
-                status.innerText = "準備中...";
-                resultVideo.style.display = "none";
-                iosHint.style.display = "none";
+                status.innerText = "生成開始...";
+                downloadArea.style.display = "none";
 
                 const zip = await JSZip.loadAsync(zipFile);
                 const stampFiles = [];
                 let autoMainFile = null;
                 zip.forEach((path, file) => {
-                    const fileNameWithExt = path.split('/').pop();
-                    const fileName = fileNameWithExt.split('.').shift();
-                    const ext = fileNameWithExt.split('.').pop().toLowerCase();
-                    if (!file.dir && ext.match(/^(png|jpg|jpeg)$/)) {
-                        if (fileName.toLowerCase() === 'main') autoMainFile = file;
-                        else if (/^\d+$/.test(fileName)) stampFiles.push(file);
+                    const fileName = path.split('/').pop().toLowerCase();
+                    if (!file.dir && fileName.match(/\.(png|jpg|jpeg)$/)) {
+                        if (fileName.startsWith('main')) autoMainFile = file;
+                        else if (fileName.match(/^\d+/)) stampFiles.push(file);
                     }
                 });
-                stampFiles.sort((a, b) => parseInt(a.name.split('/').pop()) - parseInt(b.name.split('/').pop()));
+                stampFiles.sort((a, b) => parseInt(a.name.match(/\d+/)[0]) - parseInt(b.name.match(/\d+/)[0]));
 
                 let mainImg = null;
                 if (mainImgFile) mainImg = await loadImage(URL.createObjectURL(mainImgFile));
@@ -165,28 +167,13 @@
 
                 let encoder = new VideoEncoder({
                     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-                    error: (e) => { 
-                        alert("システム制限により停止しました。スタンプ数を減らしてお試しください。");
-                        console.error(e);
-                    }
+                    error: (e) => alert(e.message)
                 });
 
-                encoder.configure({
-                    codec: 'avc1.42E01E', // Baseline
-                    width: VIDEO_W,
-                    height: VIDEO_H,
-                    bitrate: 1_200_000, // さらに下げて安定化
-                    framerate: 30,
-                    latencyMode: 'realtime' // 負荷をリアルタイム優先に
-                });
+                encoder.configure({ codec: 'avc1.42E01E', width: VIDEO_W, height: VIDEO_H, bitrate: 1_200_000, framerate: 30 });
+                while (encoder.state !== "configured") await new Promise(r => setTimeout(r, 100));
 
-                while (encoder.state !== "configured") {
-                    await new Promise(r => setTimeout(r, 100));
-                }
-
-                const FPS = 30;
                 let frameCount = 0;
-
                 for (let i = 0; i < stampFiles.length; i++) {
                     status.innerText = `生成中: ${i + 1} / ${stampFiles.length}`;
                     progress.value = ((i + 1) / stampFiles.length) * 100;
@@ -196,23 +183,18 @@
                     if (!frames) {
                         const img = await loadImage(URL.createObjectURL(new Blob([buffer])));
                         if (!img) continue;
-                        frames = [{ img, delay: 1000, width: img.width, height: img.height }];
+                        frames = [{ img, delay: 1000 }];
                     }
 
-                    const DURATION = 1.0;
                     let stampTime = 0;
                     const totalApngMs = frames.reduce((a, b) => a + b.delay, 0) || 1000;
 
-                    while (stampTime < DURATION) {
-                        // iOSハードウェアのオーバーフロー防止
-                        if (encoder.encodeQueueSize > 2) {
-                            await new Promise(r => setTimeout(r, 50));
-                        }
+                    while (stampTime < 1.0) {
+                        if (encoder.encodeQueueSize > 2) await new Promise(r => setTimeout(r, 50));
 
                         drawBaseUI(document.getElementById('titleInput').value, document.getElementById('authorInput').value, document.getElementById('footerInput').value, mainImg, document.getElementById('bgColorInput').value, document.getElementById('stampBgColorInput').value, textColor);
                         
                         const fs = 420;
-                        const fx = (VIDEO_W - fs) / 2, fy = (VIDEO_H / 2) - (fs / 2);
                         const currentMs = (stampTime * 1000) % totalApngMs;
                         let acc = 0, targetFrame = frames[0];
                         for (const f of frames) {
@@ -221,40 +203,34 @@
                         }
 
                         ctx.save();
-                        ctx.beginPath(); ctx.roundRect(fx, fy, fs, fs, 30);
+                        ctx.beginPath(); ctx.roundRect((VIDEO_W-fs)/2, (VIDEO_H-fs)/2, fs, fs, 30);
                         ctx.fillStyle = document.getElementById('stampBgColorInput').value; ctx.fill(); ctx.clip();
-                        const r = Math.min((fs-40)/targetFrame.width, (fs-40)/targetFrame.height);
-                        ctx.drawImage(targetFrame.img, fx+(fs-targetFrame.width*r)/2, fy+(fs-targetFrame.height*r)/2, targetFrame.width*r, targetFrame.height*r);
+                        const r = Math.min((fs-40)/targetFrame.img.width, (fs-40)/targetFrame.img.height);
+                        ctx.drawImage(targetFrame.img, (VIDEO_W-targetFrame.img.width*r)/2, (VIDEO_H-targetFrame.img.height*r)/2, targetFrame.img.width*r, targetFrame.img.height*r);
                         ctx.restore();
 
                         ctx.textAlign = "center"; ctx.fillStyle = textColor; ctx.font = "bold 40px sans-serif";
-                        ctx.fillText(`No. ${i + 1}`, VIDEO_W / 2, fy + fs + 70);
+                        ctx.fillText(`No. ${i + 1}`, VIDEO_W / 2, (VIDEO_H+fs)/2 + 70);
 
-                        const vFrame = new VideoFrame(canvas, {
-                            timestamp: (frameCount * 1000000) / FPS,
-                            duration: 1000000 / FPS
-                        });
-                        encoder.encode(vFrame);
-                        vFrame.close();
-                        frameCount++;
-                        stampTime += 1/FPS;
-
-                        // 負荷分散
+                        encoder.encode(new VideoFrame(canvas, { timestamp: (frameCount++ * 1000000) / 30, duration: 1000000 / 30 }));
+                        stampTime += 1/30;
                         await new Promise(r => requestAnimationFrame(r));
                     }
-                    // スタンプごとにエンコーダーのバッファを強制的に掃き出す (重要)
                     if (i % 5 === 0) await encoder.flush();
-                    await new Promise(r => setTimeout(r, 100));
                 }
 
                 await encoder.flush();
                 muxer.finalize();
                 
                 const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-                resultVideo.src = URL.createObjectURL(blob);
-                resultVideo.style.display = "block";
-                iosHint.style.display = "block";
+                const url = URL.createObjectURL(blob);
                 
+                resultVideo.src = url;
+                saveLink.href = url;
+                // iPhoneの「ファイル」アプリに保存されやすいように名前をセット
+                saveLink.download = `stamp_promo_${Date.now()}.mp4`; 
+                
+                downloadArea.style.display = "block";
                 status.innerText = "生成完了！";
             } catch (err) {
                 status.innerText = "エラー: " + err.message;
