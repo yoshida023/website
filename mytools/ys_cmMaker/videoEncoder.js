@@ -6,13 +6,15 @@ export const VIDEO_CONFIG = {
     width: 544, 
     height: 960,
     fps: 30,
-    bitrate: 1_000_000,
+    bitrate: 1_200_000,
     codec: 'avc1.42E01E' 
 };
 
+// --- 折り返しテキスト描画ヘルパー ---
 function fillWrappedText(ctx, text, x, y, maxWidth, fontSize) {
-    let currentFontSize = fontSize;
-    ctx.font = `bold ${currentFontSize}px sans-serif`;
+    ctx.save();
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textBaseline = "top"; // ここでのみ有効にする
     
     let words = text.split('');
     let lines = [];
@@ -20,8 +22,7 @@ function fillWrappedText(ctx, text, x, y, maxWidth, fontSize) {
 
     for (let n = 0; n < words.length; n++) {
         let testLine = currentLine + words[n];
-        let metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && n > 0) {
+        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
             lines.push(currentLine);
             currentLine = words[n];
         } else {
@@ -30,15 +31,17 @@ function fillWrappedText(ctx, text, x, y, maxWidth, fontSize) {
     }
     lines.push(currentLine);
 
-    if (lines.length > 2 && currentFontSize > 16) {
-        return fillWrappedText(ctx, text, x, y, maxWidth, currentFontSize - 2);
+    if (lines.length > 2 && fontSize > 16) {
+        ctx.restore();
+        return fillWrappedText(ctx, text, x, y, maxWidth, fontSize - 2);
     }
 
-    const lineHeight = currentFontSize * 1.2;
+    const lineHeight = fontSize * 1.2;
     lines.forEach((line, i) => {
         ctx.fillText(line, x, y + (i * lineHeight));
     });
     
+    ctx.restore();
     return lines.length * lineHeight;
 }
 
@@ -53,16 +56,12 @@ export async function generateStampVideo(params, onProgress) {
 
     let encoder = new VideoEncoder({
         output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-        error: (e) => { throw new Error("Encoding task failed: " + e.message); }
+        error: (e) => { throw new Error("Encoding failed: " + e.message); }
     });
 
     encoder.configure({ 
-        codec: VIDEO_CONFIG.codec, 
-        width: VIDEO_CONFIG.width, 
-        height: VIDEO_CONFIG.height, 
-        bitrate: VIDEO_CONFIG.bitrate, 
-        framerate: VIDEO_CONFIG.fps,
-        latencyMode: 'realtime'
+        codec: VIDEO_CONFIG.codec, width: VIDEO_CONFIG.width, height: VIDEO_CONFIG.height, 
+        bitrate: VIDEO_CONFIG.bitrate, framerate: VIDEO_CONFIG.fps, latencyMode: 'realtime'
     });
 
     while (encoder.state !== "configured") await new Promise(r => setTimeout(r, 100));
@@ -75,20 +74,19 @@ export async function generateStampVideo(params, onProgress) {
         const buffer = await stampFiles[i].async("arraybuffer");
         let frames = await getRenderedFrames(buffer);
         
-        if (!frames || frames.length === 0) {
+        if (!frames) {
             const blob = await stampFiles[i].async("blob");
             const img = await loadImage(URL.createObjectURL(blob));
-            if (!img) continue;
-            frames = [{ img, delay: 1000 }];
+            if (img) frames = [{ img, delay: 1000 }];
         }
+
+        if (!frames) continue;
 
         let stampTime = 0;
         const totalApngMs = frames.reduce((a, b) => a + b.delay, 0) || 1000;
 
         while (stampTime < 1.0) {
-            while (encoder.encodeQueueSize > 0) {
-                await new Promise(r => setTimeout(r, 10));
-            }
+            while (encoder.encodeQueueSize > 0) await new Promise(r => setTimeout(r, 10));
 
             drawUI(ctx, { 
                 title, author, footer, mainImg, bgColor, stampBgColor, textColor, 
@@ -106,7 +104,6 @@ export async function generateStampVideo(params, onProgress) {
             stampTime += 1 / VIDEO_CONFIG.fps;
             await new Promise(r => setTimeout(r, 1)); 
         }
-        
         if (i % 5 === 0) await encoder.flush();
     }
 
@@ -119,33 +116,24 @@ async function getRenderedFrames(buffer) {
     try {
         const apng = parseAPNG(buffer);
         if (apng instanceof Error) return null;
-        
-        // 修正: await を追加して画像のデコードを確実に待機
         await apng.createImages();
         
         const renderedFrames = [];
         const workCanvas = document.createElement('canvas');
-        workCanvas.width = apng.width; 
-        workCanvas.height = apng.height;
+        workCanvas.width = apng.width; workCanvas.height = apng.height;
         const workCtx = workCanvas.getContext('2d');
 
         for (const frame of apng.frames) {
-            if (frame.disposeOp === 1 || frame.blendOp === 0) {
-                workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
-            }
+            if (frame.disposeOp === 1 || frame.blendOp === 0) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
             workCtx.drawImage(frame.imageElement, frame.left, frame.top);
             
             const snapshot = document.createElement('canvas');
-            snapshot.width = apng.width; 
-            snapshot.height = apng.height;
+            snapshot.width = apng.width; snapshot.height = apng.height;
             snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
             renderedFrames.push({ img: snapshot, delay: frame.delay });
         }
         return renderedFrames;
-    } catch (e) { 
-        console.error("APNG parse error:", e);
-        return null; 
-    }
+    } catch (e) { return null; }
 }
 
 function getFrameAtTime(frames, stampTime, totalApngMs) {
@@ -155,13 +143,14 @@ function getFrameAtTime(frames, stampTime, totalApngMs) {
         acc += f.delay;
         if (currentMs < acc) return f;
     }
-    return frames[0];
+    return frames[frames.length - 1];
 }
 
 function drawUI(ctx, p) {
     const { width: W, height: H } = VIDEO_CONFIG;
     ctx.fillStyle = p.bgColor; ctx.fillRect(0, 0, W, H);
 
+    // Header Image
     if (p.mainImg) {
         const size = 90;
         ctx.save();
@@ -172,21 +161,24 @@ function drawUI(ctx, p) {
         ctx.restore();
     }
 
-    ctx.fillStyle = p.textColor; 
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-
-    const titleY = 75;
-    const usedHeight = fillWrappedText(ctx, p.title, 160, titleY, 340, 26);
-
+    // Text Section (タイトルの折り返し)
+    ctx.fillStyle = p.textColor;
+    const usedHeight = fillWrappedText(ctx, p.title, 160, 75, 340, 26);
+    
+    ctx.save();
     ctx.font = "20px sans-serif";
-    ctx.fillText(p.author, 160, titleY + usedHeight + 5);
+    ctx.textAlign = "left";
+    ctx.fillText(p.author, 160, 75 + usedHeight + 10);
+    ctx.restore();
 
-    ctx.textAlign = "center"; 
-    ctx.textBaseline = "alphabetic";
+    // Footer
+    ctx.save();
+    ctx.textAlign = "center";
     ctx.font = "bold 32px sans-serif";
     ctx.fillText(p.footer, W / 2, H - 100);
+    ctx.restore();
 
+    // Stamp Card
     const cardSize = 420;
     const cardX = (W - cardSize) / 2;
     const cardY = (H - cardSize) / 2;
@@ -194,15 +186,20 @@ function drawUI(ctx, p) {
     ctx.save();
     ctx.beginPath(); ctx.roundRect(cardX, cardY, cardSize, cardSize, 30);
     ctx.fillStyle = p.stampBgColor; ctx.fill(); ctx.clip();
-    
     if (p.targetFrame && p.targetFrame.img) {
-        const r = Math.min((cardSize - 40) / p.targetFrame.img.width, (cardSize - 40) / p.targetFrame.img.height);
-        ctx.drawImage(p.targetFrame.img, (W - p.targetFrame.img.width * r) / 2, (H - p.targetFrame.img.height * r) / 2, p.targetFrame.img.width * r, p.targetFrame.img.height * r);
+        const img = p.targetFrame.img;
+        const r = Math.min((cardSize - 40) / img.width, (cardSize - 40) / img.height);
+        ctx.drawImage(img, cardX + (cardSize - img.width * r) / 2, cardY + (cardSize - img.height * r) / 2, img.width * r, img.height * r);
     }
     ctx.restore();
 
-    ctx.textAlign = "center"; ctx.fillStyle = p.textColor; ctx.font = "bold 40px sans-serif";
+    // No. X Text
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = p.textColor;
+    ctx.font = "bold 40px sans-serif";
     ctx.fillText(`No. ${p.index}`, W / 2, cardY + cardSize + 70);
+    ctx.restore();
 }
 
 async function loadImage(url) {
