@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Save Button Added</title>
+    <title>preBuild for hp2025 - Ultimate Stable</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
@@ -17,27 +17,21 @@
         button:disabled { background: #ccc; }
         #status { font-size: 13px; margin-top: 10px; color: #333; text-align: center; min-height: 1.5em; }
         progress { width: 100%; height: 8px; margin-top: 5px; }
-        
         #downloadArea { margin-top: 20px; text-align: center; width: 100%; display: none; }
         video { width: 100%; border-radius: 8px; background: #000; margin-bottom: 15px; }
-        .save-button { 
-            display: block; width: 100%; padding: 18px; background: #007bff; color: white; 
-            text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 18px; 
-            box-shadow: 0 4px 0 #0056b3; transition: transform 0.1s;
-        }
-        .save-button:active { transform: translateY(4px); box-shadow: none; }
-        .ios-instruction { font-size: 12px; color: #d9534f; margin-top: 12px; text-align: left; background: #fff5f5; padding: 10px; border-radius: 6px; }
+        .save-button { display: block; width: 100%; padding: 18px; background: #007bff; color: white; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 0 #0056b3; }
+        .ios-instruction { font-size: 12px; color: #d9534f; margin-top: 12px; text-align: left; background: #fff5f5; padding: 10px; border-radius: 6px; border: 1px solid #ffeeba; }
         canvas { display: none; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (安定版)</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
-        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="ヨシダスタジオ"></div>
+        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
-        <div class="input-group"><label>メイン画像 (ZIP内main.png優先)</label><input type="file" id="mainImgInput" accept="image/*"></div>
+        <div class="input-group"><label>メイン画像</label><input type="file" id="mainImgInput" accept="image/*"></div>
         <div class="input-group"><label>スタンプZIP</label><input type="file" id="zipInput" accept=".zip"></div>
         
         <div class="color-pickers">
@@ -51,10 +45,9 @@
         
         <div id="downloadArea">
             <video id="resultVideo" controls playsinline></video>
-            <a id="saveLink" class="save-button">📥 動画をカメラロールに保存</a>
+            <a id="saveLink" class="save-button">📥 カメラロールに保存</a>
             <div class="ios-instruction">
-                <strong>iPhoneの方へ：</strong><br>
-                ボタンを押すと動画が開きます。その後、画面下の<strong>「共有ボタン（四角に↑）」</strong>を押し、<strong>「ビデオを保存」</strong>を選択してください。
+                <strong>iPhoneの方：</strong>ボタンで動画が開いたら、画面下の<strong>「共有ボタン（↑）」</strong>から<strong>「ビデオを保存」</strong>を選択してください。
             </div>
         </div>
     </div>
@@ -65,6 +58,7 @@
         import parseAPNG from 'https://cdn.skypack.dev/apng-js';
         import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
 
+        // 544(16の倍数)で固定
         const VIDEO_W = 544; 
         const VIDEO_H = 960;
         const canvas = document.getElementById('exportCanvas');
@@ -121,7 +115,7 @@
                 ctx.restore();
             }
             ctx.fillStyle = textColor; ctx.textAlign = "left";
-            ctx.font = `bold 28px sans-serif`;
+            ctx.font = `bold 26px sans-serif`;
             ctx.fillText(title, 160, 105);
             ctx.font = "20px sans-serif"; ctx.fillText(author, 160, 140);
             ctx.textAlign = "center"; ctx.font = "bold 32px sans-serif";
@@ -135,7 +129,7 @@
 
             try {
                 generateBtn.disabled = true;
-                status.innerText = "生成開始...";
+                status.innerText = "初期化中...";
                 downloadArea.style.display = "none";
 
                 const zip = await JSZip.loadAsync(zipFile);
@@ -167,10 +161,19 @@
 
                 let encoder = new VideoEncoder({
                     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-                    error: (e) => alert(e.message)
+                    error: (e) => { throw new Error("Encoding task failed: " + e.message); }
                 });
 
-                encoder.configure({ codec: 'avc1.42E01E', width: VIDEO_W, height: VIDEO_H, bitrate: 1_200_000, framerate: 30 });
+                // 最も安全な Baseline Profile 42E01E
+                encoder.configure({ 
+                    codec: 'avc1.42E01E', 
+                    width: VIDEO_W, 
+                    height: VIDEO_H, 
+                    bitrate: 1_000_000, 
+                    framerate: 30,
+                    latencyMode: 'realtime'
+                });
+
                 while (encoder.state !== "configured") await new Promise(r => setTimeout(r, 100));
 
                 let frameCount = 0;
@@ -190,7 +193,10 @@
                     const totalApngMs = frames.reduce((a, b) => a + b.delay, 0) || 1000;
 
                     while (stampTime < 1.0) {
-                        if (encoder.encodeQueueSize > 2) await new Promise(r => setTimeout(r, 50));
+                        // iOS負荷対策：キューが空になるまで待機
+                        while (encoder.encodeQueueSize > 0) {
+                            await new Promise(r => setTimeout(r, 10));
+                        }
 
                         drawBaseUI(document.getElementById('titleInput').value, document.getElementById('authorInput').value, document.getElementById('footerInput').value, mainImg, document.getElementById('bgColorInput').value, document.getElementById('stampBgColorInput').value, textColor);
                         
@@ -214,9 +220,15 @@
 
                         encoder.encode(new VideoFrame(canvas, { timestamp: (frameCount++ * 1000000) / 30, duration: 1000000 / 30 }));
                         stampTime += 1/30;
-                        await new Promise(r => requestAnimationFrame(r));
+
+                        // 毎フレーム、ブラウザに隙間をあげる
+                        await new Promise(r => setTimeout(r, 1));
                     }
-                    if (i % 5 === 0) await encoder.flush();
+                    // 5枚ごとにハードウェアを完全に空にする
+                    if (i % 5 === 0) {
+                        await encoder.flush();
+                        await new Promise(r => setTimeout(r, 100));
+                    }
                 }
 
                 await encoder.flush();
@@ -224,11 +236,9 @@
                 
                 const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
                 const url = URL.createObjectURL(blob);
-                
                 resultVideo.src = url;
                 saveLink.href = url;
-                // iPhoneの「ファイル」アプリに保存されやすいように名前をセット
-                saveLink.download = `stamp_promo_${Date.now()}.mp4`; 
+                saveLink.download = `video_${Date.now()}.mp4`;
                 
                 downloadArea.style.display = "block";
                 status.innerText = "生成完了！";
