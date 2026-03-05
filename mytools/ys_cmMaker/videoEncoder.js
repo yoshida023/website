@@ -10,41 +10,23 @@ export const VIDEO_CONFIG = {
     codec: 'avc1.42E01E' 
 };
 
-// --- 折り返しテキスト描画ヘルパー（中央揃え・絶対座標版） ---
-function fillWrappedTextCenter(ctx, text, x, y, maxWidth, fontSize) {
+// --- 1行で収まるようにフォントサイズを調整して描画するヘルパー ---
+function fillSingleLineTextCenter(ctx, text, x, y, maxWidth, initialFontSize) {
     ctx.save();
+    let fontSize = initialFontSize;
     ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.textBaseline = "top"; // 上端を基準にして並べる
-    
-    let words = text.split('');
-    let lines = [];
-    let currentLine = "";
+    ctx.textBaseline = "top";
 
-    for (let n = 0; n < words.length; n++) {
-        let testLine = currentLine + words[n];
-        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-            lines.push(currentLine);
-            currentLine = words[n];
-        } else {
-            currentLine = testLine;
-        }
-    }
-    lines.push(currentLine);
-
-    // 3行以上はフォントサイズを縮小
-    if (lines.length > 2 && fontSize > 16) {
-        ctx.restore();
-        return fillWrappedTextCenter(ctx, text, x, y, maxWidth, fontSize - 2);
+    // 幅に収まるまでサイズを下げる（最小12pxまで）
+    while (ctx.measureText(text).width > maxWidth && fontSize > 12) {
+        fontSize -= 1;
+        ctx.font = `bold ${fontSize}px sans-serif`;
     }
 
-    const lineHeight = fontSize * 1.3;
-    lines.forEach((line, i) => {
-        ctx.fillText(line, x, y + (i * lineHeight));
-    });
-    
+    ctx.fillText(text, x, y);
     ctx.restore();
-    return lines.length * lineHeight; // 実際に占有した高さを返す
+    return fontSize * 1.3; // 占有した高さを返す
 }
 
 export async function generateStampVideo(params, onProgress) {
@@ -147,11 +129,11 @@ function drawUI(ctx, p) {
     const { width: W, height: H } = VIDEO_CONFIG;
     ctx.fillStyle = p.bgColor; ctx.fillRect(0, 0, W, H);
 
-    // 1. メイン画像 (完全に中央)
-    let currentY = 70; 
+    // 1. メイン画像
+    let currentY = 80; 
     if (p.mainImg) {
         const size = 110; 
-        const imgX = (W - size) / 2; // 真ん中
+        const imgX = (W - size) / 2;
         ctx.save();
         ctx.beginPath(); 
         ctx.roundRect(imgX, currentY, size, size, 20);
@@ -159,34 +141,36 @@ function drawUI(ctx, p) {
         const r = Math.min((size - 10) / p.mainImg.width, (size - 10) / p.mainImg.height);
         ctx.drawImage(p.mainImg, imgX + (size - p.mainImg.width * r) / 2, currentY + (size - p.mainImg.height * r) / 2, p.mainImg.width * r, p.mainImg.height * r);
         ctx.restore();
-        currentY += size + 20; // 次の要素（タイトル）のためにYを下げる
+        currentY += size + 25; 
     }
 
-    // 2. タイトル (中央揃え)
+    // 2. タイトル (1行固定・自動縮小)
     ctx.fillStyle = p.textColor;
-    const titleHeight = fillWrappedTextCenter(ctx, p.title, W / 2, currentY, 440, 28);
-    currentY += titleHeight + 10; // 次の要素（作者）のためにYを下げる
+    const titleHeight = fillSingleLineTextCenter(ctx, p.title, W / 2, currentY, 480, 32);
+    currentY += titleHeight + 5; 
 
-    // 3. 作者名 (中央揃え)
+    // 3. 作者名 (1行)
     ctx.save();
     ctx.font = "20px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
+    ctx.fillStyle = p.textColor;
     ctx.fillText(p.author, W / 2, currentY);
     ctx.restore();
 
-    // 4. フッター (下部)
+    // 4. フッター
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     ctx.font = "bold 32px sans-serif";
+    ctx.fillStyle = p.textColor;
     ctx.fillText(p.footer, W / 2, H - 80);
     ctx.restore();
 
-    // 5. スタンプ表示エリア (中央)
+    // 5. スタンプエリア
     const cardSize = 420;
     const cardX = (W - cardSize) / 2;
-    const cardY = 320; // ヘッダーが縦長になったので固定位置を下げる
+    const cardY = 320; 
     
     ctx.save();
     ctx.beginPath(); ctx.roundRect(cardX, cardY, cardSize, cardSize, 30);
