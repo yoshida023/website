@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Compatibility Fixed</title>
+    <title>preBuild for hp2025 - Encoder Fix</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
@@ -25,7 +25,7 @@
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (互換性修正)</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (安定化版)</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
         <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
@@ -43,7 +43,7 @@
         
         <div id="downloadArea">
             <video id="resultVideo" controls playsinline></video>
-            <div id="iosHint" class="ios-hint">⚠️ iPhoneの場合：動画を長押しして「ビデオを保存」または「"写真"に保存」を選択してください。</div>
+            <div id="iosHint" class="ios-hint">⚠️ 動画を長押しして「ビデオを保存」を選択してください。</div>
             <div id="linkArea"></div>
         </div>
     </div>
@@ -128,7 +128,7 @@
 
             try {
                 generateBtn.disabled = true;
-                status.innerText = "生成中...";
+                status.innerText = "初期化中...";
                 resultVideo.style.display = "none";
                 iosHint.style.display = "none";
 
@@ -155,26 +155,21 @@
                     return ((r*299)+(g*587)+(b*114))/1000 >= 128 ? '#000000' : '#ffffff';
                 })(document.getElementById('bgColorInput').value);
 
-                // --- 修正: Muxerの設定をより堅牢に ---
                 let muxer = new Muxer({
                     target: new ArrayBufferTarget(),
-                    video: {
-                        codec: 'avc',
-                        width: VIDEO_W,
-                        height: VIDEO_H
-                    },
+                    video: { codec: 'avc', width: VIDEO_W, height: VIDEO_H },
                     fastStart: 'in-memory',
-                    firstTimestampBehavior: 'offset' // タイムスタンプのズレを防止
+                    firstTimestampBehavior: 'offset'
                 });
 
                 let encoder = new VideoEncoder({
                     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-                    error: (e) => console.error(e)
+                    error: (e) => { throw new Error("Encoder Error: " + e.message); }
                 });
 
-                // --- 修正: 最も互換性の高いBaseline Profile(42E01E)を使用 ---
+                // --- 重要: 設定完了を待つロジックに変更 ---
                 encoder.configure({
-                    codec: 'avc1.42E01E',
+                    codec: 'avc1.42E01E', // Baseline
                     width: VIDEO_W,
                     height: VIDEO_H,
                     bitrate: 2_000_000,
@@ -182,11 +177,14 @@
                     latencyMode: 'quality'
                 });
 
+                // 設定が確実に反映されるまで待機（数ミリ秒）
+                await new Promise(r => setTimeout(r, 100));
+
                 const FPS = 30;
                 let frameCount = 0;
 
                 for (let i = 0; i < stampFiles.length; i++) {
-                    status.innerText = `スタンプ ${i + 1} / ${stampFiles.length} 処理中...`;
+                    status.innerText = `生成中: ${i + 1} / ${stampFiles.length}`;
                     progress.value = ((i + 1) / stampFiles.length) * 100;
 
                     const buffer = await stampFiles[i].async("arraybuffer");
@@ -222,16 +220,23 @@
                         ctx.textAlign = "center"; ctx.fillStyle = textColor; ctx.font = "bold 40px sans-serif";
                         ctx.fillText(`No. ${i + 1}`, VIDEO_W / 2, fy + fs + 70);
 
-                        const vFrame = new VideoFrame(canvas, {
-                            timestamp: (frameCount * 1000000) / FPS,
-                            duration: 1000000 / FPS
-                        });
-                        encoder.encode(vFrame);
-                        vFrame.close();
-                        frameCount++;
-                        stampTime += 1/FPS;
+                        // エンコーダーの状態を確認してから実行
+                        if (encoder.state === "configured") {
+                            const vFrame = new VideoFrame(canvas, {
+                                timestamp: (frameCount * 1000000) / FPS,
+                                duration: 1000000 / FPS
+                            });
+                            encoder.encode(vFrame);
+                            vFrame.close();
+                            frameCount++;
+                            stampTime += 1/FPS;
+                        } else {
+                            // 設定が間に合っていない場合は微小時間待機
+                            await new Promise(r => setTimeout(r, 10));
+                        }
                     }
-                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 10)); // メモリ解放用
+                    // 各スタンプの区切りでブラウザのUIスレッドを解放
+                    await new Promise(r => setTimeout(r, 10));
                 }
 
                 await encoder.flush();
@@ -245,8 +250,8 @@
                 iosHint.style.display = "block";
                 
                 const a = document.createElement('a');
-                a.href = url; a.download = 'promo_video.mp4';
-                a.innerText = '📲 ビデオを直接開く / 保存';
+                a.href = url; a.download = 'stamp_promo.mp4';
+                a.innerText = '📲 動画を保存 (PCの方はここを右クリック)';
                 a.style.cssText = "display:inline-block; margin-top:15px; padding:10px 20px; background:#00b900; color:white; text-decoration:none; border-radius:6px; font-weight:bold;";
                 document.getElementById('linkArea').replaceChildren(a);
                 
