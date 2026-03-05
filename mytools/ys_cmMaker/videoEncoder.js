@@ -10,12 +10,12 @@ export const VIDEO_CONFIG = {
     codec: 'avc1.42E01E' 
 };
 
-// --- 折り返しテキスト描画ヘルパー（中央揃え版） ---
+// --- 折り返しテキスト描画ヘルパー（中央揃え・絶対座標版） ---
 function fillWrappedTextCenter(ctx, text, x, y, maxWidth, fontSize) {
     ctx.save();
     ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.textBaseline = "top";
+    ctx.textBaseline = "top"; // 上端を基準にして並べる
     
     let words = text.split('');
     let lines = [];
@@ -32,18 +32,19 @@ function fillWrappedTextCenter(ctx, text, x, y, maxWidth, fontSize) {
     }
     lines.push(currentLine);
 
+    // 3行以上はフォントサイズを縮小
     if (lines.length > 2 && fontSize > 16) {
         ctx.restore();
         return fillWrappedTextCenter(ctx, text, x, y, maxWidth, fontSize - 2);
     }
 
-    const lineHeight = fontSize * 1.2;
+    const lineHeight = fontSize * 1.3;
     lines.forEach((line, i) => {
         ctx.fillText(line, x, y + (i * lineHeight));
     });
     
     ctx.restore();
-    return lines.length * lineHeight;
+    return lines.length * lineHeight; // 実際に占有した高さを返す
 }
 
 export async function generateStampVideo(params, onProgress) {
@@ -146,43 +147,46 @@ function drawUI(ctx, p) {
     const { width: W, height: H } = VIDEO_CONFIG;
     ctx.fillStyle = p.bgColor; ctx.fillRect(0, 0, W, H);
 
-    // 1. メイン画像 (中央配置)
-    let currentY = 60; 
+    // 1. メイン画像 (完全に中央)
+    let currentY = 70; 
     if (p.mainImg) {
-        const size = 110; // 少し大きくしました
-        const imgX = (W - size) / 2;
+        const size = 110; 
+        const imgX = (W - size) / 2; // 真ん中
         ctx.save();
-        ctx.beginPath(); ctx.roundRect(imgX, currentY, size, size, 20);
+        ctx.beginPath(); 
+        ctx.roundRect(imgX, currentY, size, size, 20);
         ctx.fillStyle = p.stampBgColor; ctx.fill(); ctx.clip();
         const r = Math.min((size - 10) / p.mainImg.width, (size - 10) / p.mainImg.height);
         ctx.drawImage(p.mainImg, imgX + (size - p.mainImg.width * r) / 2, currentY + (size - p.mainImg.height * r) / 2, p.mainImg.width * r, p.mainImg.height * r);
         ctx.restore();
-        currentY += size + 20;
+        currentY += size + 20; // 次の要素（タイトル）のためにYを下げる
     }
 
-    // 2. タイトル (中央揃え & 自動折り返し)
+    // 2. タイトル (中央揃え)
     ctx.fillStyle = p.textColor;
     const titleHeight = fillWrappedTextCenter(ctx, p.title, W / 2, currentY, 440, 28);
-    currentY += titleHeight + 10;
+    currentY += titleHeight + 10; // 次の要素（作者）のためにYを下げる
 
     // 3. 作者名 (中央揃え)
     ctx.save();
     ctx.font = "20px sans-serif";
     ctx.textAlign = "center";
+    ctx.textBaseline = "top";
     ctx.fillText(p.author, W / 2, currentY);
     ctx.restore();
 
-    // 4. フッター (下部中央)
+    // 4. フッター (下部)
     ctx.save();
     ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
     ctx.font = "bold 32px sans-serif";
     ctx.fillText(p.footer, W / 2, H - 80);
     ctx.restore();
 
-    // 5. スタンプカード (中央)
+    // 5. スタンプ表示エリア (中央)
     const cardSize = 420;
     const cardX = (W - cardSize) / 2;
-    const cardY = (H / 2) - (cardSize / 2) + 40; // 少し下にずらしてバランス調整
+    const cardY = 320; // ヘッダーが縦長になったので固定位置を下げる
     
     ctx.save();
     ctx.beginPath(); ctx.roundRect(cardX, cardY, cardSize, cardSize, 30);
@@ -194,7 +198,7 @@ function drawUI(ctx, p) {
     }
     ctx.restore();
 
-    // 6. No. X 文字 (スタンプの下)
+    // 6. No. X
     ctx.save();
     ctx.textAlign = "center";
     ctx.fillStyle = p.textColor;
