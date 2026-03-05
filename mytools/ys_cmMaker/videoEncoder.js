@@ -3,12 +3,48 @@ import parseAPNG from 'https://cdn.skypack.dev/apng-js';
 import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
 
 export const VIDEO_CONFIG = {
-    width: 544, // 16の倍数
+    width: 544, 
     height: 960,
     fps: 30,
     bitrate: 1_000_000,
-    codec: 'avc1.42E01E' // Baseline Profile
+    codec: 'avc1.42E01E' 
 };
+
+// --- ヘルパー：テキストを折り返して描画する ---
+function fillWrappedText(ctx, text, x, y, maxWidth, fontSize) {
+    let currentFontSize = fontSize;
+    ctx.font = `bold ${currentFontSize}px sans-serif`;
+    
+    let words = text.split('');
+    let lines = [];
+    let currentLine = "";
+
+    // 折り返し処理
+    for (let n = 0; n < words.length; n++) {
+        let testLine = currentLine + words[n];
+        let metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && n > 0) {
+            lines.push(currentLine);
+            currentLine = words[n];
+        } else {
+            currentLine = testLine;
+        }
+    }
+    lines.push(currentLine);
+
+    // 3行以上になる場合はフォントサイズを下げて再計算（再帰）
+    if (lines.length > 2 && currentFontSize > 16) {
+        return fillWrappedText(ctx, text, x, y, maxWidth, currentFontSize - 2);
+    }
+
+    // 描画
+    const lineHeight = currentFontSize * 1.2;
+    lines.forEach((line, i) => {
+        ctx.fillText(line, x, y + (i * lineHeight));
+    });
+    
+    return lines.length * lineHeight; // 描画に使用した高さを返す
+}
 
 export async function generateStampVideo(params, onProgress) {
     const { stampFiles, mainImg, title, author, footer, bgColor, stampBgColor, textColor, canvas, ctx } = params;
@@ -33,7 +69,6 @@ export async function generateStampVideo(params, onProgress) {
         latencyMode: 'realtime'
     });
 
-    // 初期化待ち
     while (encoder.state !== "configured") await new Promise(r => setTimeout(r, 100));
 
     let frameCount = 0;
@@ -54,7 +89,6 @@ export async function generateStampVideo(params, onProgress) {
         const totalApngMs = frames.reduce((a, b) => a + b.delay, 0) || 1000;
 
         while (stampTime < 1.0) {
-            // iOS負荷対策: キューが空になるまで待機
             while (encoder.encodeQueueSize > 0) {
                 await new Promise(r => setTimeout(r, 10));
             }
@@ -69,7 +103,7 @@ export async function generateStampVideo(params, onProgress) {
             vFrame.close();
             
             stampTime += 1 / VIDEO_CONFIG.fps;
-            await new Promise(r => setTimeout(r, 1)); // 物理的な隙間
+            await new Promise(r => setTimeout(r, 1)); 
         }
         
         if (i % 5 === 0) await encoder.flush();
@@ -80,12 +114,11 @@ export async function generateStampVideo(params, onProgress) {
     return new Blob([muxer.target.buffer], { type: 'video/mp4' });
 }
 
-// --- Helper Functions ---
-async function getRenderedFrames(buffer) {
+function getRenderedFrames(buffer) {
     try {
         const apng = parseAPNG(buffer);
         if (apng instanceof Error) return null;
-        await apng.createImages();
+        apng.createImages();
         const renderedFrames = [];
         const workCanvas = document.createElement('canvas');
         workCanvas.width = apng.width; workCanvas.height = apng.height;
@@ -116,7 +149,6 @@ function drawUI(ctx, p) {
     const { width: W, height: H } = VIDEO_CONFIG;
     ctx.fillStyle = p.bgColor; ctx.fillRect(0, 0, W, H);
 
-    // Header Main Image
     if (p.mainImg) {
         const size = 90;
         ctx.save();
@@ -127,11 +159,23 @@ function drawUI(ctx, p) {
         ctx.restore();
     }
 
-    // Text
-    ctx.fillStyle = p.textColor; ctx.textAlign = "left";
-    ctx.font = "bold 26px sans-serif"; ctx.fillText(p.title, 160, 105);
-    ctx.font = "20px sans-serif"; ctx.fillText(p.author, 160, 140);
-    ctx.textAlign = "center"; ctx.font = "bold 32px sans-serif";
+    // --- 改良版：テキスト描画エリア ---
+    ctx.fillStyle = p.textColor; 
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    // タイトルの折り返し描画
+    const titleY = 75;
+    const usedHeight = fillWrappedText(ctx, p.title, 160, titleY, 340, 26);
+
+    // 作者名はタイトルの描画が終わった位置から少し下げて描画
+    ctx.font = "20px sans-serif";
+    ctx.fillText(p.author, 160, titleY + usedHeight + 5);
+
+    // フッター
+    ctx.textAlign = "center"; 
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "bold 32px sans-serif";
     ctx.fillText(p.footer, W / 2, H - 100);
 
     // Stamp Card
