@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Encoder Fix</title>
+    <title>preBuild for hp2025 - Anti-Freeze</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
@@ -17,15 +17,15 @@
         button:disabled { background: #ccc; }
         #status { font-size: 13px; margin-top: 10px; color: #333; text-align: center; min-height: 1.5em; }
         progress { width: 100%; height: 8px; margin-top: 5px; }
-        #downloadArea { margin-top: 20px; text-align: center; width: 100%; }
-        video { width: 100%; border-radius: 8px; background: #000; display: none; margin-bottom: 10px; }
-        .ios-hint { font-size: 12px; color: #666; margin-top: 8px; display: none; background: #fff3cd; padding: 8px; border-radius: 6px; }
+        video { width: 100%; border-radius: 8px; background: #000; display: none; margin-top: 15px; }
+        .ios-hint { font-size: 11px; color: #888; margin-top: 8px; display: none; }
+        canvas { display: none; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (安定化版)</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (安定版)</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
         <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
@@ -43,7 +43,7 @@
         
         <div id="downloadArea">
             <video id="resultVideo" controls playsinline></video>
-            <div id="iosHint" class="ios-hint">⚠️ 動画を長押しして「ビデオを保存」を選択してください。</div>
+            <div id="iosHint" class="ios-hint">💡 iPhone：動画を長押しして保存</div>
             <div id="linkArea"></div>
         </div>
     </div>
@@ -68,31 +68,33 @@
         const iosHint = document.getElementById('iosHint');
 
         async function getRenderedFrames(buffer) {
-            const apng = parseAPNG(buffer);
-            if (apng instanceof Error) return null;
-            await apng.createImages();
-            const renderedFrames = [];
-            const workCanvas = document.createElement('canvas');
-            workCanvas.width = apng.width;
-            workCanvas.height = apng.height;
-            const workCtx = workCanvas.getContext('2d');
-            apng.frames.forEach((frame) => {
-                if (frame.disposeOp === 1) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
-                if (frame.blendOp === 0) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
-                workCtx.drawImage(frame.imageElement, frame.left, frame.top);
-                const snapshot = document.createElement('canvas');
-                snapshot.width = apng.width; snapshot.height = apng.height;
-                snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
-                renderedFrames.push({ img: snapshot, delay: frame.delay, width: apng.width, height: apng.height });
-            });
-            return renderedFrames;
+            try {
+                const apng = parseAPNG(buffer);
+                if (apng instanceof Error) return null;
+                await apng.createImages();
+                const renderedFrames = [];
+                const workCanvas = document.createElement('canvas');
+                workCanvas.width = apng.width;
+                workCanvas.height = apng.height;
+                const workCtx = workCanvas.getContext('2d');
+                apng.frames.forEach((frame) => {
+                    if (frame.disposeOp === 1) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+                    if (frame.blendOp === 0) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+                    workCtx.drawImage(frame.imageElement, frame.left, frame.top);
+                    const snapshot = document.createElement('canvas');
+                    snapshot.width = apng.width; snapshot.height = apng.height;
+                    snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
+                    renderedFrames.push({ img: snapshot, delay: frame.delay, width: apng.width, height: apng.height });
+                });
+                return renderedFrames;
+            } catch (e) { return null; }
         }
 
         async function loadImage(url) {
-            return new Promise((res, rej) => {
+            return new Promise((res) => {
                 const img = new Image();
                 img.onload = () => res(img);
-                img.onerror = rej;
+                img.onerror = () => res(null);
                 img.src = url;
             });
         }
@@ -102,8 +104,7 @@
             if (mainImg) {
                 const fs = 90;
                 ctx.save();
-                ctx.beginPath();
-                ctx.roundRect(50, 70, fs, fs, 15);
+                ctx.beginPath(); ctx.roundRect(50, 70, fs, fs, 15);
                 ctx.fillStyle = stampBgColor; ctx.fill(); ctx.clip();
                 const r = Math.min((fs-10)/mainImg.width, (fs-10)/mainImg.height);
                 ctx.drawImage(mainImg, 50+(fs-mainImg.width*r)/2, 70+(fs-mainImg.height*r)/2, mainImg.width*r, mainImg.height*r);
@@ -128,7 +129,7 @@
 
             try {
                 generateBtn.disabled = true;
-                status.innerText = "初期化中...";
+                status.innerText = "ZIP展開中...";
                 resultVideo.style.display = "none";
                 iosHint.style.display = "none";
 
@@ -145,6 +146,7 @@
                     }
                 });
                 stampFiles.sort((a, b) => parseInt(a.name.split('/').pop()) - parseInt(b.name.split('/').pop()));
+                if (stampFiles.length === 0) throw new Error("画像が見つかりません");
 
                 let mainImg = null;
                 if (mainImgFile) mainImg = await loadImage(URL.createObjectURL(mainImgFile));
@@ -164,21 +166,19 @@
 
                 let encoder = new VideoEncoder({
                     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-                    error: (e) => { throw new Error("Encoder Error: " + e.message); }
+                    error: (e) => { throw new Error(e.message); }
                 });
 
-                // --- 重要: 設定完了を待つロジックに変更 ---
                 encoder.configure({
-                    codec: 'avc1.42E01E', // Baseline
-                    width: VIDEO_W,
-                    height: VIDEO_H,
-                    bitrate: 2_000_000,
+                    codec: 'avc1.42E01E',
+                    width: VIDEO_W, height: VIDEO_H,
+                    bitrate: 1_500_000, // 少し下げて安定化
                     framerate: 30,
                     latencyMode: 'quality'
                 });
 
-                // 設定が確実に反映されるまで待機（数ミリ秒）
-                await new Promise(r => setTimeout(r, 100));
+                // 設定完了待ち
+                await new Promise(r => setTimeout(r, 200));
 
                 const FPS = 30;
                 let frameCount = 0;
@@ -191,7 +191,8 @@
                     let frames = await getRenderedFrames(buffer);
                     if (!frames) {
                         const img = await loadImage(URL.createObjectURL(new Blob([buffer])));
-                        frames = [{ img: img, delay: 1000, width: img.width, height: img.height }];
+                        if (!img) continue;
+                        frames = [{ img, delay: 1000, width: img.width, height: img.height }];
                     }
 
                     const DURATION = 1.0;
@@ -199,6 +200,11 @@
                     let stampTime = 0;
 
                     while (stampTime < DURATION) {
+                        // キューが詰まったら待つ（フリーズ防止の肝）
+                        while (encoder.encodeQueueSize > 5) {
+                            await new Promise(r => setTimeout(r, 30));
+                        }
+
                         const currentMs = (stampTime * 1000) % totalApngMs;
                         let acc = 0, targetFrame = frames[0];
                         for (const f of frames) {
@@ -220,23 +226,20 @@
                         ctx.textAlign = "center"; ctx.fillStyle = textColor; ctx.font = "bold 40px sans-serif";
                         ctx.fillText(`No. ${i + 1}`, VIDEO_W / 2, fy + fs + 70);
 
-                        // エンコーダーの状態を確認してから実行
-                        if (encoder.state === "configured") {
-                            const vFrame = new VideoFrame(canvas, {
-                                timestamp: (frameCount * 1000000) / FPS,
-                                duration: 1000000 / FPS
-                            });
-                            encoder.encode(vFrame);
-                            vFrame.close();
-                            frameCount++;
-                            stampTime += 1/FPS;
-                        } else {
-                            // 設定が間に合っていない場合は微小時間待機
-                            await new Promise(r => setTimeout(r, 10));
-                        }
+                        const vFrame = new VideoFrame(canvas, {
+                            timestamp: (frameCount * 1000000) / FPS,
+                            duration: 1000000 / FPS
+                        });
+                        encoder.encode(vFrame);
+                        vFrame.close();
+                        frameCount++;
+                        stampTime += 1/FPS;
+
+                        // 1フレームごとにUIスレッドに制御を戻す（重要！）
+                        await new Promise(r => requestAnimationFrame(r));
                     }
-                    // 各スタンプの区切りでブラウザのUIスレッドを解放
-                    await new Promise(r => setTimeout(r, 10));
+                    // スタンプ1個ごとに少し長めに休む
+                    await new Promise(r => setTimeout(r, 50));
                 }
 
                 await encoder.flush();
@@ -250,15 +253,14 @@
                 iosHint.style.display = "block";
                 
                 const a = document.createElement('a');
-                a.href = url; a.download = 'stamp_promo.mp4';
-                a.innerText = '📲 動画を保存 (PCの方はここを右クリック)';
-                a.style.cssText = "display:inline-block; margin-top:15px; padding:10px 20px; background:#00b900; color:white; text-decoration:none; border-radius:6px; font-weight:bold;";
+                a.href = url; a.download = 'stamps.mp4';
+                a.innerText = '🎥 保存用リンク（PC/Android）';
+                a.style.cssText = "display:inline-block; margin-top:15px; font-size:12px; color:#00b900;";
                 document.getElementById('linkArea').replaceChildren(a);
                 
                 status.innerText = "生成完了！";
             } catch (err) {
                 status.innerText = "エラー: " + err.message;
-                console.error(err);
             } finally {
                 generateBtn.disabled = false;
             }
