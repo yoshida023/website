@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Anti-Freeze</title>
+    <title>preBuild for hp2025 - Configuration Fixed</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
@@ -18,14 +18,14 @@
         #status { font-size: 13px; margin-top: 10px; color: #333; text-align: center; min-height: 1.5em; }
         progress { width: 100%; height: 8px; margin-top: 5px; }
         video { width: 100%; border-radius: 8px; background: #000; display: none; margin-top: 15px; }
-        .ios-hint { font-size: 11px; color: #888; margin-top: 8px; display: none; }
+        .ios-hint { font-size: 11px; color: #888; margin-top: 8px; display: none; padding: 8px; background: #eee; border-radius: 4px; }
         canvas { display: none; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (安定版)</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (Config修正版)</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
         <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
@@ -43,7 +43,7 @@
         
         <div id="downloadArea">
             <video id="resultVideo" controls playsinline></video>
-            <div id="iosHint" class="ios-hint">💡 iPhone：動画を長押しして保存</div>
+            <div id="iosHint" class="ios-hint">💡 iPhone：動画を長押しして「ビデオを保存」を選択</div>
             <div id="linkArea"></div>
         </div>
     </div>
@@ -129,7 +129,7 @@
 
             try {
                 generateBtn.disabled = true;
-                status.innerText = "ZIP展開中...";
+                status.innerText = "初期化中...";
                 resultVideo.style.display = "none";
                 iosHint.style.display = "none";
 
@@ -157,6 +157,7 @@
                     return ((r*299)+(g*587)+(b*114))/1000 >= 128 ? '#000000' : '#ffffff';
                 })(document.getElementById('bgColorInput').value);
 
+                // --- Encoder & Muxer setup ---
                 let muxer = new Muxer({
                     target: new ArrayBufferTarget(),
                     video: { codec: 'avc', width: VIDEO_W, height: VIDEO_H },
@@ -166,19 +167,33 @@
 
                 let encoder = new VideoEncoder({
                     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-                    error: (e) => { throw new Error(e.message); }
+                    error: (e) => { 
+                        alert("エンコードエラー: " + e.message);
+                        generateBtn.disabled = false;
+                    }
                 });
 
-                encoder.configure({
+                // Baseline Profileで設定
+                const videoConfig = {
                     codec: 'avc1.42E01E',
-                    width: VIDEO_W, height: VIDEO_H,
-                    bitrate: 1_500_000, // 少し下げて安定化
+                    width: VIDEO_W,
+                    height: VIDEO_H,
+                    bitrate: 1_500_000,
                     framerate: 30,
                     latencyMode: 'quality'
-                });
+                };
 
-                // 設定完了待ち
-                await new Promise(r => setTimeout(r, 200));
+                // 設定の適用
+                encoder.configure(videoConfig);
+
+                // --- 修正: 設定が完了するまで確実に待機 ---
+                let checkCount = 0;
+                while (encoder.state !== "configured") {
+                    status.innerText = "エンコーダー準備中...";
+                    await new Promise(r => setTimeout(r, 100));
+                    checkCount++;
+                    if (checkCount > 50) throw new Error("エンコーダーの初期化に失敗しました。");
+                }
 
                 const FPS = 30;
                 let frameCount = 0;
@@ -200,11 +215,15 @@
                     let stampTime = 0;
 
                     while (stampTime < DURATION) {
-                        // キューが詰まったら待つ（フリーズ防止の肝）
+                        // キューが詰まっている場合は待機
                         while (encoder.encodeQueueSize > 5) {
-                            await new Promise(r => setTimeout(r, 30));
+                            await new Promise(r => setTimeout(r, 20));
                         }
 
+                        drawBaseUI(document.getElementById('titleInput').value, document.getElementById('authorInput').value, document.getElementById('footerInput').value, mainImg, document.getElementById('bgColorInput').value, document.getElementById('stampBgColorInput').value, textColor);
+                        
+                        const fs = 420;
+                        const fx = (VIDEO_W - fs) / 2, fy = (VIDEO_H / 2) - (fs / 2);
                         const currentMs = (stampTime * 1000) % totalApngMs;
                         let acc = 0, targetFrame = frames[0];
                         for (const f of frames) {
@@ -212,10 +231,6 @@
                             if (currentMs < acc) { targetFrame = f; break; }
                         }
 
-                        drawBaseUI(document.getElementById('titleInput').value, document.getElementById('authorInput').value, document.getElementById('footerInput').value, mainImg, document.getElementById('bgColorInput').value, document.getElementById('stampBgColorInput').value, textColor);
-                        
-                        const fs = 420;
-                        const fx = (VIDEO_W - fs) / 2, fy = (VIDEO_H / 2) - (fs / 2);
                         ctx.save();
                         ctx.beginPath(); ctx.roundRect(fx, fy, fs, fs, 30);
                         ctx.fillStyle = document.getElementById('stampBgColorInput').value; ctx.fill(); ctx.clip();
@@ -226,19 +241,20 @@
                         ctx.textAlign = "center"; ctx.fillStyle = textColor; ctx.font = "bold 40px sans-serif";
                         ctx.fillText(`No. ${i + 1}`, VIDEO_W / 2, fy + fs + 70);
 
-                        const vFrame = new VideoFrame(canvas, {
-                            timestamp: (frameCount * 1000000) / FPS,
-                            duration: 1000000 / FPS
-                        });
-                        encoder.encode(vFrame);
-                        vFrame.close();
-                        frameCount++;
-                        stampTime += 1/FPS;
+                        // 送信直前に再確認
+                        if (encoder.state === "configured") {
+                            const vFrame = new VideoFrame(canvas, {
+                                timestamp: (frameCount * 1000000) / FPS,
+                                duration: 1000000 / FPS
+                            });
+                            encoder.encode(vFrame);
+                            vFrame.close();
+                            frameCount++;
+                            stampTime += 1/FPS;
+                        }
 
-                        // 1フレームごとにUIスレッドに制御を戻す（重要！）
                         await new Promise(r => requestAnimationFrame(r));
                     }
-                    // スタンプ1個ごとに少し長めに休む
                     await new Promise(r => setTimeout(r, 50));
                 }
 
@@ -246,21 +262,14 @@
                 muxer.finalize();
                 
                 const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-                const url = URL.createObjectURL(blob);
-                
-                resultVideo.src = url;
+                resultVideo.src = URL.createObjectURL(blob);
                 resultVideo.style.display = "block";
                 iosHint.style.display = "block";
-                
-                const a = document.createElement('a');
-                a.href = url; a.download = 'stamps.mp4';
-                a.innerText = '🎥 保存用リンク（PC/Android）';
-                a.style.cssText = "display:inline-block; margin-top:15px; font-size:12px; color:#00b900;";
-                document.getElementById('linkArea').replaceChildren(a);
                 
                 status.innerText = "生成完了！";
             } catch (err) {
                 status.innerText = "エラー: " + err.message;
+                console.error(err);
             } finally {
                 generateBtn.disabled = false;
             }
