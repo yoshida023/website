@@ -3,122 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>日報統合システムプロトタイプ</title>
+    <title>preBuild for hp2025</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
-            --primary-blue: #3b82f6;
-            --active-blue: #1d4ed8;
-            --light-blue: #e0efff;
-            --border-color: #d1d5db;
-            --draft-gray: #6b7280;
-            --ok-green: #52c41a;
-            --ng-red: #ff4d4f;
+            --primary-blue: #3b82f6; --active-blue: #1d4ed8; --light-blue: #e0efff;
+            --border-color: #d1d5db; --draft-gray: #6b7280; --ok-green: #52c41a; --ng-red: #ff4d4f;
         }
-
-        body {
-            font-family: "Helvetica Neue", Arial, sans-serif;
-            background-color: #f0f0f0;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 480px;
-            background-color: white;
-            min-height: 100vh;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-        }
-
-        header { background-color: var(--light-blue); padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
-        .logo-area { font-weight: bold; font-size: 20px; color: #1a365d; display: flex; align-items: center; }
-        
+        body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f0f0f0; margin: 0; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 480px; background: white; min-height: 100vh; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+        header { background: var(--light-blue); padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .logo-area { font-weight: bold; font-size: 18px; color: #1a365d; }
         .main-content { padding: 15px; }
-
-        .config-section {
-            background-color: #fffbe6;
-            border: 1px solid #ffe58f;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 15px;
-            font-size: 13px;
-        }
-
-        .section-box {
-            background-color: #f1f7ff;
-            border-radius: 12px;
-            padding: 18px;
-            border: 1px solid #cce0ff;
-            margin-bottom: 20px;
-        }
-
-        h2 { font-size: 18px; margin: 0 0 15px 0; color: #333; border-left: 4px solid var(--primary-blue); padding-left: 8px; }
-        .today-date { font-size: 14px; color: #555; font-weight: bold; }
-
-        .action-btns-row { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; }
-        
+        .config-section { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 12px; margin-bottom: 15px; }
+        .section-box { background: #f1f7ff; border-radius: 12px; padding: 18px; border: 1px solid #cce0ff; margin-bottom: 20px; }
+        h2 { font-size: 17px; margin: 0 0 15px 0; border-left: 4px solid var(--primary-blue); padding-left: 8px; }
+        .action-btns-row { display: flex; gap: 8px; margin-bottom: 20px; }
         .btn-action {
-            background-color: var(--primary-blue);
-            color: white; border: none; border-radius: 10px;
-            flex: 1; font-weight: bold;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            min-height: 65px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            cursor: pointer;
-            transition: opacity 0.2s;
+            background: var(--primary-blue); color: white; border: none; border-radius: 10px;
+            flex: 1; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 65px; cursor: pointer; transition: opacity 0.2s;
         }
-        .btn-action:disabled { opacity: 0.6; cursor: not-allowed; }
-        .stamp-time { font-size: 11px; font-weight: normal; margin-top: 4px; opacity: 0.9; }
-
-        .remote-toggle {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-width: 65px;
-            gap: 5px;
-            cursor: pointer;
-        }
-        .remote-toggle span { font-size: 10px; font-weight: bold; color: #666; }
-
+        .btn-action:disabled { background-color: var(--active-blue); opacity: 0.8; }
+        .stamp-time { font-size: 11px; margin-top: 4px; opacity: 0.9; }
+        .remote-toggle { display: flex; flex-direction: column; align-items: center; cursor: pointer; min-width: 60px; }
+        .form-group { margin-bottom: 12px; }
+        .sub-label { display: block; font-size: 11px; color: #666; margin-bottom: 4px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 15px; box-sizing: border-box; background: white; }
         .status-selector { display: flex; gap: 10px; margin-bottom: 15px; }
         .status-option { flex: 1; position: relative; }
-        .status-option input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-        .status-label {
-            display: flex; align-items: center; justify-content: center; padding: 12px;
-            border: 2px solid var(--border-color); border-radius: 10px; background: white;
-            font-weight: bold; color: #666; text-align: center;
-        }
+        .status-option input { position: absolute; opacity: 0; }
+        .status-label { display: block; padding: 10px; border: 2px solid var(--border-color); border-radius: 8px; text-align: center; font-weight: bold; cursor: pointer; color: #666; }
         .status-option input:checked + .status-label.status-ok { border-color: var(--ok-green); color: var(--ok-green); background: #f6ffed; }
         .status-option input:checked + .status-label.status-ng { border-color: var(--ng-red); color: var(--ng-red); background: #fff1f0; }
-
         .counter-container { display: flex; align-items: center; background: white; border: 1px solid var(--border-color); border-radius: 8px; width: fit-content; }
-        .counter-btn { background: #f8f9fa; border: none; padding: 10px 18px; font-size: 20px; font-weight: bold; cursor: pointer; }
-        .counter-input { width: 45px; border: none; text-align: center; font-size: 18px; font-weight: bold; }
-
-        .form-group { margin-bottom: 12px; }
-        .sub-label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: bold; }
-        input[type="text"], input[type="password"], select, textarea {
-            width: 100%; padding: 10px; border: 1px solid var(--border-color);
-            border-radius: 8px; font-size: 15px; box-sizing: border-box; background: white;
-        }
-
-        .submit-area { display: flex; gap: 12px; margin-top: 20px; }
-        .btn-large {
-            border: none; padding: 16px; border-radius: 10px; font-size: 16px; font-weight: bold;
-            display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1;
-            cursor: pointer;
-        }
-        .btn-main { background-color: var(--primary-blue); color: white; flex: 2; }
+        .counter-btn { background: #f8f9fa; border: none; padding: 8px 15px; font-size: 18px; cursor: pointer; }
+        .counter-input { width: 40px; border: none; text-align: center; font-size: 16px; font-weight: bold; }
+        .btn-main { background: var(--primary-blue); color: white; border: none; padding: 16px; border-radius: 10px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <div class="logo-area">日報統合システムプロトタイプ</div>
-        <div id="current-date" class="today-date"></div>
+        <div class="logo-area">preBuild for hp2025</div>
+        <div id="current-date" style="font-size: 13px; font-weight: bold;"></div>
     </header>
 
     <div class="main-content">
@@ -128,53 +57,51 @@
                 <input type="password" id="api-token" placeholder="xoxp-xxx">
             </div>
             <div class="form-group">
+                <span class="sub-label">アラート用メンション (IDをスペース区切り):</span>
+                <input type="text" id="mention-ids" placeholder="U12345678">
+            </div>
+            <div class="form-group">
                 <span class="sub-label">勤怠送信先チャンネル:</span>
                 <select id="kintai-channel">
-                    <option value="#1901_勤怠連絡_1g">#1901_勤怠連絡_1g</option>
-                    <option value="#1902_勤怠連絡_2g">#1902_勤怠連絡_2g</option>
-                    <option value="#1903_勤怠連絡_3g">#1903_勤怠連絡_3g</option>
-                    <option value="#1904_勤怠連絡_4g">#1904_勤怠連絡_4g</option>
                     <option value="#1905_勤怠連絡_5g" selected>#1905_勤怠連絡_5g</option>
                 </select>
             </div>
         </div>
 
         <div class="section-box">
-            <h2>本日のアクション</h2>
+            <h2>打刻アクション</h2>
             <div class="action-btns-row">
-                <button class="btn-action" onclick="handleStamp(this, ':開始:')"><span>出勤</span><span class="stamp-time">--:--</span></button>
+                <button class="btn-action" id="btn-start" onclick="handleStamp(this, ':開始:')"><span>出勤</span><span class="stamp-time">--:--</span></button>
                 <button class="btn-action" onclick="handleStamp(this, ':休憩入:')"><span>休憩入</span><span class="stamp-time">--:--</span></button>
                 <button class="btn-action" onclick="handleStamp(this, ':休憩戻:')"><span>休憩戻</span><span class="stamp-time">--:--</span></button>
-                
                 <div class="remote-toggle" onclick="toggleRemote(this)">
-                    <span>在宅勤務</span>
+                    <span style="font-size: 10px; font-weight: bold; color: #666; margin-bottom: 4px;">在宅勤務</span>
                     <i id="remote-icon" class="fa-solid fa-toggle-off fa-2x" style="color:#ccc;"></i>
                 </div>
             </div>
 
-            <h2 style="margin-top:10px;">今日の日報</h2>
-            <div style="font-size: 11px; color: #999; margin-bottom: 10px;">送信先: #日報 (固定)</div>
+            <h2>今日の日報報告</h2>
+            <div style="font-size: 11px; color: #999; margin-bottom: 10px;">送信先: #2104_日報</div>
             
-            <div class="form-group"><span class="sub-label">担当業務</span><input type="text" id="task-name" class="save-state"></div>
             <div class="form-group"><span class="sub-label">案件名</span><input type="text" id="project-name" class="save-state"></div>
+            <div class="form-group"><span class="sub-label">担当業務</span><input type="text" id="task-name" class="save-state"></div>
             <div class="form-group">
                 <span class="sub-label">開発フェーズ</span>
-                <select id="phase" class="save-state"><option>業務分析</option><option>要件定義・提案</option><option>基本設計</option><option>詳細設計</option><option>CD/UT</option><option>結合試験</option><option>総合試験</option><option>運用試験</option><option>リリース</option><option>本番作業</option></select>
+                <select id="phase" class="save-state">
+                    <option>業務分析</option><option>要件定義・提案</option><option>基本設計</option>
+                    <option>詳細設計</option><option>CD/UT</option><option>結合試験</option>
+                    <option>総合試験</option><option>運用試験</option><option>リリース</option><option>本番作業</option>
+                </select>
             </div>
-
             <div class="status-selector">
                 <div class="status-option">
-                    <input type="radio" name="status" id="st-ok" value="順調" class="save-state" checked>
-                    <label for="st-ok" class="status-label status-ok">順調</label>
+                    <input type="radio" name="status" id="st-ok" value="順調" class="save-state"><label for="st-ok" class="status-label status-ok">順調</label>
                 </div>
                 <div class="status-option">
-                    <input type="radio" name="status" id="st-ng" value="遅延" class="save-state">
-                    <label for="st-ng" class="status-label status-ng">遅延</label>
+                    <input type="radio" name="status" id="st-ng" value="遅延" class="save-state" checked><label for="st-ng" class="status-label status-ng">遅延</label>
                 </div>
             </div>
-
-            <div class="form-group"><input type="text" id="status-detail" placeholder="見通しを入力..." class="save-state"></div>
-
+            <div class="form-group"><input type="text" id="status-detail" placeholder="進捗詳細" class="save-state"></div>
             <div class="form-group">
                 <span class="sub-label">担当案件数</span>
                 <div class="counter-container">
@@ -183,33 +110,25 @@
                     <button class="counter-btn" onclick="changeCount(1)">＋</button>
                 </div>
             </div>
+            <div class="form-group"><span class="sub-label">問題点</span><textarea id="issue" rows="2" class="save-state"></textarea></div>
+            <div class="form-group"><span class="sub-label">備考</span><textarea id="note" rows="2" class="save-state"></textarea></div>
 
-            <div class="form-group"><span class="sub-label">問題点</span><textarea id="issue" rows="2" placeholder="特になし" class="save-state"></textarea></div>
-            <div class="form-group"><span class="sub-label">備考</span><textarea id="note" rows="2" placeholder="特記事項なし" class="save-state"></textarea></div>
-
-            <div class="submit-area">
-                <button class="btn-large btn-main" onclick="handleStamp(this, ':終了:')">
-                    <span>退勤（日報送信）</span>
-                    <span class="stamp-time" style="font-size:13px;">--:--</span>
-                </button>
-            </div>
+            <button class="btn-main" id="btn-end" onclick="handleStamp(this, ':終了:')">退勤（日報送信）</button>
         </div>
     </div>
 </div>
 
 <script src="slack-post.js"></script>
-
 <script>
-    // 日報の送信先（固定）
-    const REPORT_CHANNEL = "#日報";
+    const REPORT_CHANNEL = "#2104_日報";
+    const STORAGE_KEY = "prebuild_hp2025_vFinal";
     let isRemoteActive = false;
-
-    // --- LocalStorage 管理 ---
-    const STORAGE_KEY = "prebuild_hp2025_state";
+    let startTimeValue = "--:--";
 
     function saveState() {
         const state = {
             token: document.getElementById('api-token').value,
+            mentions: document.getElementById('mention-ids').value,
             kintaiChannel: document.getElementById('kintai-channel').value,
             task: document.getElementById('task-name').value,
             project: document.getElementById('project-name').value,
@@ -219,7 +138,8 @@
             count: document.getElementById('project-count').value,
             issue: document.getElementById('issue').value,
             note: document.getElementById('note').value,
-            isRemote: isRemoteActive
+            isRemote: isRemoteActive,
+            startTime: startTimeValue
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
@@ -228,9 +148,8 @@
         const saved = localStorage.getItem(STORAGE_KEY);
         if (!saved) return;
         const state = JSON.parse(saved);
-
         document.getElementById('api-token').value = state.token || "";
-        document.getElementById('kintai-channel').value = state.kintaiChannel || "#1905_勤怠連絡_5g";
+        document.getElementById('mention-ids').value = state.mentions || "";
         document.getElementById('task-name').value = state.task || "";
         document.getElementById('project-name').value = state.project || "";
         document.getElementById('phase').value = state.phase || "詳細設計";
@@ -238,93 +157,92 @@
         document.getElementById('project-count').value = state.count || "1";
         document.getElementById('issue').value = state.issue || "";
         document.getElementById('note').value = state.note || "";
-
+        startTimeValue = state.startTime || "--:--";
+        if (startTimeValue !== "--:--") document.getElementById('btn-start').querySelector('.stamp-time').innerText = startTimeValue;
         if (state.status === "順調") document.getElementById('st-ok').checked = true;
         if (state.isRemote) toggleRemote(document.querySelector('.remote-toggle'), true);
     }
 
-    // すべての入力項目にイベントリスナーを一括登録
-    document.addEventListener('input', (e) => {
-        if (e.target.closest('.save-state') || e.target.id === 'api-token' || e.target.id === 'kintai-channel') {
-            saveState();
-        }
-    });
+    document.addEventListener('input', () => saveState());
 
-    // --- 基本機能 ---
     function updateDate() {
         const now = new Date();
-        const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][now.getDay()];
-        document.getElementById('current-date').innerText = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}(${dayOfWeek})`;
+        const days = ["日", "月", "火", "水", "木", "金", "土"];
+        document.getElementById('current-date').innerText = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}(${days[now.getDay()]})`;
     }
 
     function toggleRemote(el, forceState = null) {
         const icon = el.querySelector('i');
         isRemoteActive = forceState !== null ? forceState : icon.classList.contains('fa-toggle-off');
-        
-        if (isRemoteActive) {
-            icon.classList.replace('fa-toggle-off', 'fa-toggle-on');
-            icon.style.color = "var(--ok-green)";
-        } else {
-            icon.classList.replace('fa-toggle-on', 'fa-toggle-off');
-            icon.style.color = "#ccc";
-        }
+        icon.className = isRemoteActive ? "fa-solid fa-toggle-on fa-2x" : "fa-solid fa-toggle-off fa-2x";
+        icon.style.color = isRemoteActive ? "var(--ok-green)" : "#ccc";
         saveState();
     }
 
     function changeCount(val) {
         const input = document.getElementById('project-count');
-        let current = parseInt(input.value);
-        if (current + val >= 0) input.value = current + val;
+        input.value = Math.max(0, parseInt(input.value) + val);
         saveState();
     }
 
     async function handleStamp(button, slackText) {
         const token = document.getElementById('api-token').value.trim();
         const kintaiChannel = document.getElementById('kintai-channel').value;
-        const currentTime = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-        const timeSpan = button.querySelector('.stamp-time');
+        const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
         
+        if (slackText === ':開始:') { startTimeValue = time; saveState(); }
+
+        const isReport = (slackText === ':終了:');
+
+        if(!token) { alert("Tokenを入力してください"); return; }
         button.disabled = true;
-        button.style.backgroundColor = "var(--active-blue)";
-
+        let payload, targetChannel;
+        
+        
         if (isRemoteActive) {
-            if(!token) { alert("トークンを入力してください"); button.disabled = false; return; }
-            
-            let message = slackText;
-            let targetChannel = kintaiChannel; // デフォルトは選択された勤怠チャンネル
-/*
-            if (slackText === ':終了:') {
-                targetChannel = REPORT_CHANNEL; // 退勤時は「#日報」固定
-                const task = document.getElementById('task-name').value;
-                const project = document.getElementById('project-name').value;
-                const phase = document.getElementById('phase').value;
-                const status = document.querySelector('input[name="status"]:checked').value;
-                const statusDetail = document.getElementById('status-detail').value;
-                const count = document.getElementById('project-count').value;
-                const issue = document.getElementById('issue').value || "特になし";
-                const note = document.getElementById('note').value || "特になし";
-
-                message = `:終了: 【退勤・日報】\n---------------------------\n■業務内容: ${task}\n■案件名: ${project}\n■フェーズ: ${phase}\n■進捗状況: ${status} (${statusDetail})\n■担当案件数: ${count}\n■問題点: ${issue}\n■備考: ${note}\n---------------------------`;
-            }
-*/
-            const success = await sendToSlackViaGAS(token, targetChannel, message);
-            if (!success) {
-                alert("Slackへの送信に失敗しました。");
-                button.disabled = false;
-                button.style.backgroundColor = "var(--primary-blue)";
-                return;
-            }
+            await sendRemoteChannel(button, slackText, token);
         }
 
-        timeSpan.innerText = (slackText === ':終了:' ? "打刻 " : "") + currentTime;
-        if (slackText === ':終了:') alert("送信完了しました。");
+        if (isReport) {
+            targetChannel = REPORT_CHANNEL;
+            const status = document.querySelector('input[name="status"]:checked').value;
+            const issue = document.getElementById('issue').value;
+            const note = document.getElementById('note').value;
+            const mentions = document.getElementById('mention-ids').value;
+            const isAlert = (status === '遅延') || (issue.trim() !== '') || (note.trim() !== '');
+
+            payload = createReportBlocks({
+                date: document.getElementById('current-date').innerText,
+                startTime: startTimeValue,
+                endTime: time,
+                project: document.getElementById('project-name').value,
+                task: document.getElementById('task-name').value,
+                phase: document.getElementById('phase').value,
+                status: status,
+                isRemote: isRemoteActive,
+                statusDetail: document.getElementById('status-detail').value,
+                count: document.getElementById('project-count').value,
+                issue: issue,
+                note: note,
+                mentions: isAlert ? mentions : ""
+            });
+
+            const success = await sendToSlackViaGAS(token, targetChannel, payload);
+            if (!success) alert("日報チャンネル(slack)送信に失敗しました。");
+        }
+
+        if (isReport) alert("日報送信完了");
+        const timeSpan = button.querySelector('.stamp-time');
+        if (timeSpan) timeSpan.innerText = (isReport ? "打刻 " : "") + time;
+        button.disabled = false;
     }
 
-    // 初期化
-    window.onload = () => {
-        updateDate();
-        loadState();
-    };
+    async function sendRemoteChannel(button, slackText, token) {
+        const success = await sendToSlackViaGAS(token, document.getElementById('kintai-channel').value, slackText);
+        if (!success) alert("勤怠報告チャンネル(slack)送信に失敗しました。");
+    }
+
+    window.onload = () => { updateDate(); loadState(); };
 </script>
 </body>
 </html>
