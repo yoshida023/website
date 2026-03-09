@@ -74,58 +74,38 @@ export async function generateStampVideo(params, onProgress) {
     return new Blob([muxer.target.buffer], { type: 'video/mp4' });
 }
 
-// --- 【修正】フレーム残りを防ぐレンダリングロジック ---
 async function getRenderedFrames(buffer) {
     try {
         const apng = parseAPNG(buffer);
         if (apng instanceof Error) return null;
         await apng.createImages();
         const renderedFrames = [];
-        
-        // 作業用Canvas
         const workCanvas = document.createElement('canvas');
-        workCanvas.width = apng.width;
-        workCanvas.height = apng.height;
+        workCanvas.width = apng.width; workCanvas.height = apng.height;
         const workCtx = workCanvas.getContext('2d');
-
-        // 直前の状態を保持するCanvas（Dispose To Previous用）
         const prevCanvas = document.createElement('canvas');
-        prevCanvas.width = apng.width;
-        prevCanvas.height = apng.height;
+        prevCanvas.width = apng.width; prevCanvas.height = apng.height;
         const prevCtx = prevCanvas.getContext('2d');
 
         for (const frame of apng.frames) {
-            // 描画前に「直前の状態」を保存（Dispose To Previous 対策）
             if (frame.disposeOp === 2) {
                 prevCtx.clearRect(0, 0, apng.width, apng.height);
                 prevCtx.drawImage(workCanvas, 0, 0);
             }
-
-            // Blend Operation 0 (Source): 上書き描画
             if (frame.blendOp === 0) {
                 workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
             }
-
-            // フレームを描画
             workCtx.drawImage(frame.imageElement, frame.left, frame.top);
-
-            // 現在の完成図をスナップショットとして保存
             const snapshot = document.createElement('canvas');
-            snapshot.width = apng.width;
-            snapshot.height = apng.height;
+            snapshot.width = apng.width; snapshot.height = apng.height;
             snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
             renderedFrames.push({ img: snapshot, delay: frame.delay });
-
-            // Dispose Operation の処理（描画後に Canvas をどうするか）
             if (frame.disposeOp === 1) {
-                // Background (1): 描画した領域をクリア
                 workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
             } else if (frame.disposeOp === 2) {
-                // Previous (2): 描画前の状態に戻す
                 workCtx.clearRect(0, 0, apng.width, apng.height);
                 workCtx.drawImage(prevCanvas, 0, 0);
             }
-            // None (0) の場合は何もしない（そのまま残す）
         }
         return renderedFrames;
     } catch (e) { return null; }
