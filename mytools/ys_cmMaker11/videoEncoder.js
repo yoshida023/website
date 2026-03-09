@@ -25,15 +25,20 @@ export async function generateStampVideo(params, onProgress) {
 
     const isEmoji = stampData.length > 0 && stampData[0].img?.width === 180;
     const cols = isEmoji ? 7 : 4;
-    const headerHeight = 200;
+    
+    // ヘッダーを120pxに縮小し、残りの高さをスタンプ領域に割り当て
+    const headerHeight = 120;
+    const footerMargin = 20;
+    const availableHeight = config.height - headerHeight - footerMargin;
+    
+    // 6行で割り切れるようにセルの高さを計算
     const cellWidth = config.width / cols;
-    const cellHeight = (config.height - headerHeight) / 6; // 6行基準のサイズ
-    const padding = 8;
+    const cellHeight = availableHeight / 6; 
+    const padding = 6; // 枠線の隙間
 
     const totalRows = Math.ceil(stampData.length / cols);
     const shouldScroll = totalRows > 6;
     
-    // スクロール時の計算
     const scrollDuration = 5; 
     const totalFrames = shouldScroll ? (scrollDuration * config.fps) : 90;
     const scrollLimit = Math.max(0, (totalRows * cellHeight) - (config.height - headerHeight));
@@ -56,7 +61,6 @@ export async function generateStampVideo(params, onProgress) {
             const cellX = col * cellWidth;
             const cellY = (row * cellHeight) + headerHeight - offsetY;
 
-            // 画面内にあるものだけ描画
             if (cellY > headerHeight - cellHeight && cellY < config.height) {
                 const availableW = cellWidth - (padding * 2);
                 const availableH = cellHeight - (padding * 2);
@@ -76,10 +80,10 @@ export async function generateStampVideo(params, onProgress) {
 
                 ctx.save();
                 ctx.beginPath();
-                ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 12);
+                ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 8);
                 ctx.fillStyle = stampBgColor;
                 ctx.fill();
-                ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                ctx.strokeStyle = "rgba(0,0,0,0.08)";
                 ctx.stroke();
                 ctx.clip();
                 ctx.drawImage(activeFrame, drawX, drawY, drawW, drawH);
@@ -87,12 +91,13 @@ export async function generateStampVideo(params, onProgress) {
             }
         }
 
+        // タイトル背景（薄く）
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, headerHeight);
         ctx.fillStyle = textColor;
-        ctx.font = "bold 32px sans-serif";
+        ctx.font = "bold 28px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(title, config.width / 2, 120);
+        ctx.fillText(title, config.width / 2, 70);
 
         const vFrame = new VideoFrame(canvas, { 
             timestamp: (f * 1000000) / config.fps, 
