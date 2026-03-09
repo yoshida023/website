@@ -2,97 +2,100 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - TikTok紹介動画生成</title>
+    <title>TikTok紹介動画生成 - preBuild for hp2025</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; line-height: 1.6; }
-        .input-box { margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
-        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f9f9f9; }
+        .panel { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #00b900; color: white; border: none; border-radius: 8px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>TikTok紹介動画生成</h1>
-    <div class="input-box">
-        <input type="file" id="zipInput" accept=".zip"><br>
-        <input type="text" id="title" placeholder="タイトル" value="スタンプ紹介">
-        <input type="text" id="author" placeholder="作者名" value="作者名">
-        <textarea id="comment" placeholder="コメント">TikTokで使ってね！</textarea>
+
+    <div class="panel">
+        <h3>TikTokスタンプ動画生成</h3>
+        <input type="text" id="title" value="LINEスタンプ紹介">
+        <input type="text" id="author" value="作者名">
+        <textarea id="comment" rows="3">TikTokで使ってね！</textarea>
+        <input type="file" id="zipInput" accept=".zip">
+        <button id="generateBtn">動画を生成</button>
+        <div id="status">準備完了</div>
     </div>
-    <button id="generateBtn">動画を生成してダウンロード</button>
+
+    <canvas id="exportCanvas" style="display:none"></canvas>
 
     <script type="module">
-        import { VideoCore } from './modules/VideoCore.js';
-        import { UIHelper } from './modules/UIHelper.js';
+        import { VideoCore } from './VideoCore.js';
+        import { UIHelper } from './UIHelper.js';
 
-        // TikTok用高画質設定 (実績コードの構造を参考)
-        const TIKTOK_CONFIG = {
-            width: 1080, height: 1920, fps: 30, bitrate: 5_000_000, codec: 'avc1.640028'
-        };
+        const generateBtn = document.getElementById('generateBtn');
+        const status = document.getElementById('status');
+        const canvas = document.getElementById('exportCanvas');
+        const ctx = canvas.getContext('2d');
 
-        document.getElementById('generateBtn').addEventListener('click', async () => {
-            const file = document.getElementById('zipInput').files[0];
-            if (!file) return alert('ZIPを選択してください');
+        generateBtn.onclick = async () => {
+            const zipFile = document.getElementById('zipInput').files[0];
+            if (!zipFile) return alert("ZIPを選択してください");
 
-            // 1. フレーム取得
-            const buffer = await file.arrayBuffer();
-            const renderedFrames = await VideoCore.getRenderedFrames(buffer);
-            if (!renderedFrames) return alert('解析失敗');
+            // 1. ZIP解析 (実績のある手法)
+            const zip = await JSZip.loadAsync(zipFile);
+            const stampImages = [];
+            for (const path in zip.files) {
+                if (path.endsWith('.png')) {
+                    const blob = await zip.files[path].async("blob");
+                    const img = await createImageBitmap(blob);
+                    stampImages.push(img);
+                }
+            }
 
-            // 2. エンコーダー初期化
-            const { muxer, encoder } = await VideoCore.createEncoder(TIKTOK_CONFIG, false);
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = TIKTOK_CONFIG.width;
-            canvas.height = TIKTOK_CONFIG.height;
-            const ctx = canvas.getContext('2d');
+            // 2. TikTok用設定 (1080x1920 / Level 4.0)
+            const config = { width: 1080, height: 1920, fps: 30, bitrate: 5_000_000, codec: 'avc1.640028' };
+            canvas.width = config.width;
+            canvas.height = config.height;
 
-            const totalFrames = 300; // 10秒
-            const isEmoji = false; // 必要に応じてUIから取得
-            const cols = isEmoji ? 7 : 4;
+            const { muxer, encoder } = await VideoCore.createEncoder(config, false);
+
+            // 3. 動画生成ループ (10秒 = 300フレーム)
+            const totalFrames = 300;
+            const cols = 4; // スタンプ4列
             const cellSize = 200;
-            const gap = 40;
-            const headerHeight = 400;
+            const gap = 50;
 
-            // 3. 動画ループ生成
             for (let i = 0; i < totalFrames; i++) {
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, 1080, 1920);
 
                 // スクロール計算
-                const maxScroll = Math.max(0, (Math.ceil(renderedFrames.length / cols) * (cellSize + gap)) - 1200);
-                const scrollY = (i / totalFrames) * maxScroll;
+                const scrollY = (i / totalFrames) * Math.max(0, (Math.ceil(stampImages.length / cols) * 250) - 1200);
 
                 // スタンプ描画
-                renderedFrames.forEach((f, idx) => {
-                    const col = idx % cols;
-                    const row = Math.floor(idx / cols);
-                    const x = 80 + col * (cellSize + gap);
-                    const y = headerHeight + row * (cellSize + gap) - scrollY;
-                    
-                    if (y > -cellSize && y < 1920) {
-                        ctx.drawImage(f.img, x, y, cellSize, cellSize);
-                    }
+                stampImages.forEach((img, idx) => {
+                    const x = 100 + (idx % cols) * (cellSize + gap);
+                    const y = 400 + Math.floor(idx / cols) * (cellSize + gap) - scrollY;
+                    if (y > -200 && y < 1920) ctx.drawImage(img, x, y, cellSize, cellSize);
                 });
 
-                // ヘッダー・フッター描画 (UIHelper活用)
+                // ヘッダー・フッター描画 (UIHelper使用)
                 UIHelper.drawTextFit(ctx, document.getElementById('title').value, 540, 50, 900, 80, '#000');
-                UIHelper.drawTextFit(ctx, document.getElementById('author').value, 540, 150, 800, 40, '#666');
                 UIHelper.drawTextWrap(ctx, document.getElementById('comment').value, 540, 1700, 900, 30, '#333');
 
-                const vFrame = new VideoFrame(canvas, { timestamp: i * 33333 });
-                encoder.encode(vFrame);
-                vFrame.close();
+                const frame = new VideoFrame(canvas, { timestamp: i * 33333 });
+                encoder.encode(frame);
+                frame.close();
+                status.innerText = `生成中: ${i}/${totalFrames}`;
             }
 
             await encoder.flush();
-            
-            // 4. ダウンロード
             const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'tiktok_sticker_preview.mp4';
-            link.click();
-        });
+            
+            // ダウンロード処理
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'tiktok_sticker.mp4';
+            a.click();
+            status.innerText = "生成完了！";
+        };
     </script>
 </body>
 </html>
