@@ -1,6 +1,5 @@
 // videoEncoder.js - preBuild for hp2025
 import { VideoCore } from './modules/VideoCore.js';
-import { UIHelper } from './modules/UIHelper.js';
 
 export const CONFIG_MOBILE = { width: 544, height: 960, fps: 30, bitrate: 1_200_000, codec: 'avc1.42E01E' };
 export const CONFIG_PC = { width: 540, height: 960, fps: 30, bitrate: 2_500_000, codec: 'avc1.4D401F' };
@@ -26,24 +25,17 @@ export async function generateStampVideo(params, onProgress) {
 
     const isEmoji = stampData.length > 0 && stampData[0].width === 180;
     const cols = isEmoji ? 7 : 4;
-    
-    // セル幅を計算し、アイテムサイズをセルと同一（余白なし）にする
     const cellWidth = config.width / cols;
-    const itemSize = cellWidth; 
+    const padding = 10; // 枠線とアイテムの隙間
+    const itemSize = cellWidth - (padding * 2);
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
 
-    const totalRows = Math.ceil(stampData.length / cols);
-    const scrollDuration = 10;
-    const totalFrames = scrollDuration * config.fps;
-    const scrollLimit = Math.max(0, (totalRows * cellWidth) - config.height + 250);
+    // スクロールせず、全フレームを静止画として一定時間出力する
+    const totalFrames = 90; // 3秒間固定表示
 
     for (let f = 0; f < totalFrames; f++) {
-        if (f % 30 === 0 && onProgress) onProgress(f, totalFrames);
-
-        const progress = f / totalFrames;
-        const offsetY = progress * scrollLimit;
-        const currentTimeMs = (f / config.fps) * 1000;
+        if (f % 10 === 0 && onProgress) onProgress(f, totalFrames);
 
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, config.height);
@@ -52,37 +44,45 @@ export async function generateStampVideo(params, onProgress) {
             const { frames, totalDuration } = stampData[i];
             const row = Math.floor(i / cols);
             const col = i % cols;
-            
-            // 座標計算（余白なしで隣接させる）
-            const x = col * cellWidth;
-            const y = (row * cellWidth) - offsetY + 200;
+            const x = (col * cellWidth) + padding;
+            const y = (row * cellWidth) + 200 + padding; // タイトル分下げる
 
-            if (y > -cellWidth && y < config.height) {
-                const loopTime = currentTimeMs % totalDuration;
-                let acc = 0;
-                let activeFrame = frames[frames.length - 1].img;
-                for (const frame of frames) {
-                    acc += frame.delay;
-                    if (loopTime < acc) {
-                        activeFrame = frame.img;
-                        break;
-                    }
+            // アニメーションフレームの計算
+            const currentTimeMs = (f / config.fps) * 1000;
+            const loopTime = currentTimeMs % totalDuration;
+            let acc = 0;
+            let activeFrame = frames[frames.length - 1].img;
+            for (const frame of frames) {
+                acc += frame.delay;
+                if (loopTime < acc) {
+                    activeFrame = frame.img;
+                    break;
                 }
-                // UIHelper.drawRoundedImageを呼び出している箇所を、
-                // 今回はシンプルに ctx.drawImage で最大表示するように調整可能です
-                ctx.drawImage(activeFrame, x, y, itemSize, itemSize);
             }
+
+            // 1. スタンプの角丸背景・枠線描画
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(x, y, itemSize, itemSize, 12);
+            ctx.fillStyle = stampBgColor;
+            ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.15)"; // 薄い線
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.clip(); // はみ出し防止
+
+            // 2. 画像描画
+            ctx.drawImage(activeFrame, x, y, itemSize, itemSize);
+            ctx.restore();
         }
 
-        // タイトルエリア
+        // タイトル表示
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, 180);
         ctx.fillStyle = textColor;
         ctx.font = "bold 32px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(title, config.width / 2, 80);
-        ctx.font = "20px sans-serif";
-        ctx.fillText(author, config.width / 2, 120);
 
         const vFrame = new VideoFrame(canvas, { 
             timestamp: (f * 1000000) / config.fps, 
