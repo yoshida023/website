@@ -28,9 +28,9 @@
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (ハイブリッド)</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
-        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="ヨシダスタジオ"></div>
+        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
         <div class="input-group"><label>メイン画像</label><input type="file" id="mainImgInput" accept="image/*"></div>
         <div class="input-group"><label>スタンプZIP</label><input type="file" id="zipInput" accept=".zip"></div>
@@ -76,9 +76,11 @@
                 generateBtn.disabled = true;
                 downloadArea.style.display = "none";
                 
+                // モバイルかPCかを判定
                 const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
                 const activeConfig = isMobile ? CONFIG_MOBILE : CONFIG_PC;
                 
+                // キャンバスサイズを環境に合わせて動的に設定
                 canvas.width = activeConfig.width;
                 canvas.height = activeConfig.height;
 
@@ -89,25 +91,32 @@
                 zip.forEach((path, file) => {
                     const name = path.split('/').pop().toLowerCase();
                     if (!file.dir && name.match(/\.(png|apng|jpg|jpeg)$/i) && !path.startsWith('__MACOSX')) {
-                        if (name.includes('main')) autoMainFile = file;
-                        else if (name.match(/^\d+/)) stampFiles.push(file);
+                        if (name.includes('main')) {
+                            autoMainFile = file;
+                        } else if (name.match(/^\d+/)) {
+                            stampFiles.push(file);
+                        }
                     }
                 });
 
+                // 数字順にソート
                 stampFiles.sort((a, b) => {
-                    const numA = parseInt(a.name.match(/^\d+/)[0]);
-                    const numB = parseInt(b.name.match(/^\d+/)[0]);
+                    const numA = parseInt(a.name.match(/\d+/)[0]);
+                    const numB = parseInt(b.name.match(/\d+/)[0]);
                     return numA - numB;
                 });
 
-                if (stampFiles.length === 0) throw new Error("対象の画像が見つかりませんでした");
+                if (stampFiles.length === 0) throw new Error("対象の画像ファイルが見つかりませんでした");
 
                 let mainImg = null;
                 const mainImgFile = document.getElementById('mainImgInput').files[0];
                 const mainSrc = mainImgFile ? URL.createObjectURL(mainImgFile) : (autoMainFile ? URL.createObjectURL(await autoMainFile.async("blob")) : null);
                 if (mainSrc) {
                     mainImg = await new Promise(res => {
-                        const img = new Image(); img.onload = () => res(img); img.src = mainSrc;
+                        const img = new Image(); 
+                        img.onload = () => res(img); 
+                        img.onerror = () => res(null);
+                        img.src = mainSrc;
                     });
                 }
 
@@ -118,7 +127,8 @@
                 })(bgColor);
 
                 const blob = await generateStampVideo({
-                    stampFiles, mainImg, 
+                    stampFiles, 
+                    mainImg, 
                     title: document.getElementById('titleInput').value,
                     author: document.getElementById('authorInput').value,
                     footer: document.getElementById('footerInput').value,
@@ -126,7 +136,8 @@
                     stampBgColor: document.getElementById('stampBgColorInput').value,
                     textColor,
                     fullAnim: document.getElementById('fullAnimInput').checked,
-                    canvas, ctx
+                    canvas, 
+                    ctx
                 }, (current, total) => {
                     status.innerText = `生成中 (${isMobile ? 'スマホ' : 'PC'}モード): ${current} / ${total}`;
                     progress.value = (current / total) * 100;
@@ -136,6 +147,8 @@
                 document.getElementById('resultVideo').src = url;
                 document.getElementById('saveLink').href = url;
                 document.getElementById('saveLink').download = `stamp_video_${Date.now()}.mp4`;
+                
+                // iPhone向けの案内表示を切り替え
                 document.getElementById('iosInstruction').style.display = isMobile ? "block" : "none";
                 downloadArea.style.display = "block";
                 status.innerText = "生成完了！";
