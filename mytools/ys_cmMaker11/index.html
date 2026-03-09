@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スタンプ紹介動画生成アプリ（スライド）</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        /* スタイルは変更なし（省略） */
+        body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .panel { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box; }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #666; }
+        input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin: 15px 0; }
+        .checkbox-group label { margin-bottom: 0; cursor: pointer; }
+        .color-pickers { display: flex; gap: 10px; }
+        .color-pickers .input-group { flex: 1; }
+        button { width: 100%; padding: 15px; background: #00b900; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        #status { font-size: 13px; margin-top: 10px; text-align: center; min-height: 1.5em; }
+        progress { width: 100%; height: 8px; margin-top: 5px; }
+        #downloadArea { margin-top: 20px; text-align: center; display: none; }
+        video { width: 100%; border-radius: 8px; background: #000; margin-bottom: 15px; }
+        .save-button { display: block; width: 100%; padding: 18px; background: #007bff; color: white; text-decoration: none; border-radius: 10px; font-weight: bold; }
+        .ios-instruction { font-size: 11px; color: #d9534f; margin-top: 10px; background: #fff5f5; padding: 8px; border-radius: 4px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h3 style="margin:0 0 15px 0">スタンプ紹介動画生成アプリ（スライド）</h3>
+        <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
+        <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="作者名"></div>
+        <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
+        <div class="input-group"><label>メイン画像</label><input type="file" id="mainImgInput" accept="image/*"></div>
+        <div class="input-group"><label>スタンプZIP</label><input type="file" id="zipInput" accept=".zip"></div>
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="fullAnimInput">
+            <label for="fullAnimInput">アニメーションを最後まで再生する</label>
+        </div>
+
+        <div class="color-pickers">
+            <div class="input-group"><label>全体の背景色</label><input type="color" id="bgColorInput" value="#f4f4f4"></div>
+            <div class="input-group"><label>枠の背景色</label><input type="color" id="stampBgColorInput" value="#ffffff"></div>
+        </div>
+        
+        <button id="generateBtn">動画を生成</button>
+        <div id="status">準備完了</div>
+        <progress id="progress" value="0" max="100"></progress>
+        
+        <div id="downloadArea">
+            <video id="resultVideo" controls playsinline></video>
+            <a id="saveLink" class="save-button">📥 動画を保存</a>
+            <div id="iosInstruction" class="ios-instruction" style="display:none">iPhoneの方：ボタンで動画が開いたら、共有ボタン（↑）から「ビデオを保存」してください。</div>
+        </div>
+    </div>
+
+    <canvas id="exportCanvas" style="display:none"></canvas>
+
+    <script type="module">
+        // 分割した videoEncoder.js からインポート
+        import { generateStampVideo, CONFIG_MOBILE, CONFIG_PC } from './videoEncoder.js';
+
+        const generateBtn = document.getElementById('generateBtn');
+        const status = document.getElementById('status');
+        const progress = document.getElementById('progress');
+        const downloadArea = document.getElementById('downloadArea');
+        const canvas = document.getElementById('exportCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+
+        generateBtn.onclick = async () => {
+            const zipFile = document.getElementById('zipInput').files[0];
+            if (!zipFile) return alert("ZIPを選択してください");
+
+            try {
+                generateBtn.disabled = true;
+                downloadArea.style.display = "none";
+                
+                // デバイス判定と解像度設定
+                const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+                const activeConfig = isMobile ? CONFIG_MOBILE : CONFIG_PC;
+                
+                canvas.width = activeConfig.width;
+                canvas.height = activeConfig.height;
+
+                const zip = await JSZip.loadAsync(zipFile);
+                const stampFiles = [];
+                let autoMainFile = null;
+
+                zip.forEach((path, file) => {
+                    const name = path.split('/').pop().toLowerCase();
+                    if (!file.dir && name.match(/\.(png|apng|jpg|jpeg)$/i) && !path.startsWith('__MACOSX')) {
+                        if (name.includes('main')) autoMainFile = file;
+                        else if (name.match(/^\d+/)) stampFiles.push(file);
+                    }
+                });
+
+                stampFiles.sort((a, b) => {
+                    const numA = parseInt(a.name.match(/\d+/)[0]);
+                    const numB = parseInt(b.name.match(/^\d+/)[0]);
+                    return numA - numB;
+                });
+
+                if (stampFiles.length === 0) throw new Error("画像が見つかりませんでした");
+
+                let mainImg = null;
+                const mainImgFile = document.getElementById('mainImgInput').files[0];
+                const mainSrc = mainImgFile ? URL.createObjectURL(mainImgFile) : (autoMainFile ? URL.createObjectURL(await autoMainFile.async("blob")) : null);
+                if (mainSrc) {
+                    mainImg = await new Promise(res => {
+                        const img = new Image(); img.onload = () => res(img); img.src = mainSrc;
+                    });
+                }
+
+                const bgColor = document.getElementById('bgColorInput').value;
+                const textColor = ((hex) => {
+                    const r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
+                    return ((r*299)+(g*587)+(b*114))/1000 >= 128 ? '#000000' : '#ffffff';
+                })(bgColor);
+
+                // 動画生成エンジンの呼び出し
+                const blob = await generateStampVideo({
+                    stampFiles, mainImg, 
+                    title: document.getElementById('titleInput').value,
+                    author: document.getElementById('authorInput').value,
+                    footer: document.getElementById('footerInput').value,
+                    bgColor,
+                    stampBgColor: document.getElementById('stampBgColorInput').value,
+                    textColor,
+                    fullAnim: document.getElementById('fullAnimInput').checked,
+                    canvas, ctx
+                }, (current, total) => {
+                    status.innerText = `生成中 (${isMobile ? 'スマホ' : 'PC'}モード): ${current} / ${total}`;
+                    progress.value = (current / total) * 100;
+                });
+
+                const url = URL.createObjectURL(blob);
+                document.getElementById('resultVideo').src = url;
+                document.getElementById('saveLink').href = url;
+                document.getElementById('saveLink').download = `video_${Date.now()}.mp4`;
+                document.getElementById('iosInstruction').style.display = isMobile ? "block" : "none";
+                downloadArea.style.display = "block";
+                status.innerText = "生成完了！";
+            } catch (err) {
+                status.innerText = "エラー: " + err.message;
+                console.error(err);
+            } finally {
+                generateBtn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>
