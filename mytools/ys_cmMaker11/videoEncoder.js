@@ -23,69 +23,76 @@ export async function generateStampVideo(params, onProgress) {
         return { frames, totalDuration, img };
     }));
 
-    // 判定: 幅180pxなら絵文字(7列)、それ以外はスタンプ(4列)
     const isEmoji = stampData.length > 0 && stampData[0].img?.width === 180;
     const cols = isEmoji ? 7 : 4;
+    const headerHeight = 200;
     const cellWidth = config.width / cols;
-    const cellHeight = cellWidth; // セルの高さは維持
-    const padding = 12; // 枠との隙間
+    const cellHeight = (config.height - headerHeight) / 6; // 6行基準のサイズ
+    const padding = 8;
+
+    const totalRows = Math.ceil(stampData.length / cols);
+    const shouldScroll = totalRows > 6;
+    
+    // スクロール時の計算
+    const scrollDuration = 5; 
+    const totalFrames = shouldScroll ? (scrollDuration * config.fps) : 90;
+    const scrollLimit = Math.max(0, (totalRows * cellHeight) - (config.height - headerHeight));
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
-    const totalFrames = 90; // 3秒間固定
 
     for (let f = 0; f < totalFrames; f++) {
+        if (f % 30 === 0 && onProgress) onProgress(f, totalFrames);
+
+        const progress = shouldScroll ? (f / totalFrames) : 0;
+        const offsetY = progress * scrollLimit;
+
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, config.height);
 
         for (let i = 0; i < stampData.length; i++) {
             const { frames, totalDuration, img } = stampData[i];
-            if (!img) continue;
-
             const row = Math.floor(i / cols);
             const col = i % cols;
             const cellX = col * cellWidth;
-            const cellY = (row * cellHeight) + 200;
+            const cellY = (row * cellHeight) + headerHeight - offsetY;
 
-            // アスペクト比を維持した拡大計算
-            const availableW = cellWidth - (padding * 2);
-            const availableH = cellHeight - (padding * 2);
-            const ratio = Math.min(availableW / img.width, availableH / img.height);
-            const drawW = img.width * ratio;
-            const drawH = img.height * ratio;
-            
-            // セル内中央寄せ
-            const drawX = cellX + (cellWidth - drawW) / 2;
-            const drawY = cellY + (cellHeight - drawH) / 2;
+            // 画面内にあるものだけ描画
+            if (cellY > headerHeight - cellHeight && cellY < config.height) {
+                const availableW = cellWidth - (padding * 2);
+                const availableH = cellHeight - (padding * 2);
+                const ratio = Math.min(availableW / img.width, availableH / img.height);
+                const drawW = img.width * ratio;
+                const drawH = img.height * ratio;
+                const drawX = cellX + (cellWidth - drawW) / 2;
+                const drawY = cellY + (cellHeight - drawH) / 2;
 
-            // アニメーションフレーム計算
-            const loopTime = ((f / config.fps) * 1000) % totalDuration;
-            let acc = 0;
-            let activeFrame = frames[frames.length - 1].img;
-            for (const frame of frames) {
-                acc += frame.delay;
-                if (loopTime < acc) { activeFrame = frame.img; break; }
+                const loopTime = ((f / config.fps) * 1000) % totalDuration;
+                let acc = 0;
+                let activeFrame = frames[frames.length - 1].img;
+                for (const frame of frames) {
+                    acc += frame.delay;
+                    if (loopTime < acc) { activeFrame = frame.img; break; }
+                }
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 12);
+                ctx.fillStyle = stampBgColor;
+                ctx.fill();
+                ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                ctx.stroke();
+                ctx.clip();
+                ctx.drawImage(activeFrame, drawX, drawY, drawW, drawH);
+                ctx.restore();
             }
-
-            // 角丸枠線と描画
-            ctx.save();
-            ctx.beginPath();
-            ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 12);
-            ctx.fillStyle = stampBgColor;
-            ctx.fill();
-            ctx.strokeStyle = "rgba(0,0,0,0.1)";
-            ctx.stroke();
-            ctx.clip();
-            ctx.drawImage(activeFrame, drawX, drawY, drawW, drawH);
-            ctx.restore();
         }
 
-        // タイトル
         ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, config.width, 200);
+        ctx.fillRect(0, 0, config.width, headerHeight);
         ctx.fillStyle = textColor;
         ctx.font = "bold 32px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(title, config.width / 2, 100);
+        ctx.fillText(title, config.width / 2, 120);
 
         const vFrame = new VideoFrame(canvas, { 
             timestamp: (f * 1000000) / config.fps, 
