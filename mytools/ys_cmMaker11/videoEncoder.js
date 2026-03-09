@@ -6,7 +6,7 @@ export const CONFIG_MOBILE = { width: 544, height: 960, fps: 30, bitrate: 1_200_
 export const CONFIG_PC = { width: 540, height: 960, fps: 30, bitrate: 2_500_000, codec: 'avc1.4D401F' };
 
 /**
- * preBuild for hp2025: 一覧スクロール動画生成関数
+ * preBuild for hp2025: グリッドスクロール動画生成関数
  */
 export async function generateStampVideo(params, onProgress) {
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
@@ -16,27 +16,32 @@ export async function generateStampVideo(params, onProgress) {
         bgColor, stampBgColor, textColor, canvas, ctx 
     } = params;
 
-    // 設定: スタンプ(4x10)か絵文字(7x6)かの判定
-    const isEmoji = stampFiles.length > 40;
+    // 1. ZIPからファイルを取得し、番号順にソートする
+    const sortedFiles = [...stampFiles].sort((a, b) => {
+        const numA = parseInt(a.name.match(/\d+/)?.[0] || 0);
+        const numB = parseInt(b.name.match(/\d+/)?.[0] || 0);
+        return numA - numB;
+    });
+
+    // 2. レイアウト判定
+    const isEmoji = sortedFiles.length > 40;
     const cols = isEmoji ? 7 : 4;
     const cellWidth = config.width / cols;
-    const cellHeight = cellWidth; // 正方形として配置
+    const cellHeight = cellWidth;
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
 
-    // 1. 全スタンプを画像として読み込み
-    const loadedImages = await Promise.all(stampFiles.map(async (file) => {
+    // 3. 画像の事前読み込み
+    const loadedImages = await Promise.all(sortedFiles.map(async (file) => {
         const buffer = await file.async("arraybuffer");
         const frames = await VideoCore.getRenderedFrames(buffer);
         return frames ? frames[0].img : null;
     }));
 
-    // 2. スクロール設定（全行をスクロールする時間）
+    // 4. スクロールアニメーション設定
     const totalRows = Math.ceil(loadedImages.length / cols);
-    const scrollDuration = 10; // 秒数
+    const scrollDuration = 8; // 全スクロールにかける秒数
     const totalFrames = scrollDuration * config.fps;
-    
-    // スクロール範囲: 全体の高さ - 画面の高さ
     const scrollLimit = Math.max(0, (totalRows * cellHeight) - config.height + 200);
 
     for (let f = 0; f < totalFrames; f++) {
@@ -45,29 +50,33 @@ export async function generateStampVideo(params, onProgress) {
         const progress = f / totalFrames;
         const offsetY = progress * scrollLimit;
 
-        // --- 描画処理 ---
+        // 背景描画
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, config.height);
 
-        // スタンプ描画
+        // 各スタンプのグリッド描画
         for (let i = 0; i < loadedImages.length; i++) {
             const row = Math.floor(i / cols);
             const col = i % cols;
-            const x = col * cellWidth + (cellWidth * 0.1);
-            const y = (row * cellHeight) - offsetY + 150; // タイトル分下に配置
+            const x = col * cellWidth + (cellWidth * 0.05);
+            const y = (row * cellHeight) - offsetY + 180; // タイトル分を下げる
 
+            // 画面内にあるスタンプのみ描画
             if (y > -cellHeight && y < config.height) {
-                UIHelper.drawRoundedImage(ctx, loadedImages[i], x, y, cellWidth * 0.8, 10, stampBgColor);
+                UIHelper.drawRoundedImage(ctx, loadedImages[i], x, y, cellWidth * 0.9, 10, stampBgColor);
             }
         }
 
-        // 固定ヘッダー/フッター描画
+        // 上部タイトル領域（隠すために重ね塗り）
         ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, config.width, 150);
+        ctx.fillRect(0, 0, config.width, 160);
+        
         ctx.fillStyle = textColor;
-        ctx.font = "bold 30px sans-serif";
+        ctx.font = "bold 32px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(title, config.width / 2, 50);
+        ctx.fillText(title, config.width / 2, 80);
+        ctx.font = "20px sans-serif";
+        ctx.fillText(author, config.width / 2, 120);
 
         const vFrame = new VideoFrame(canvas, { 
             timestamp: (f * 1000000) / config.fps, 
