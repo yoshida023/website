@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>preBuild for hp2025</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        input[type="text"], input[type="color"], input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin: 15px 0; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #status { margin-top: 15px; text-align: center; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Stamp Video Generator</h2>
+    
+    <div class="input-group">
+        <label>スタンプ画像 (複数選択 or ZIP)</label>
+        <input type="file" id="stampsInput" multiple accept="image/*,.zip">
+    </div>
+
+    <div class="input-group">
+        <label>メイン画像 (ヘッダー用アイコン)</label>
+        <input type="file" id="mainImgInput" accept="image/*">
+    </div>
+
+    <div class="input-group">
+        <label>タイトル (1行に自動縮小)</label>
+        <input type="text" id="titleInput" placeholder="スタンプ名を入力">
+    </div>
+
+    <div class="input-group">
+        <label>作者名</label>
+        <input type="text" id="authorInput" placeholder="作者名を入力">
+    </div>
+
+    <div class="input-group">
+        <label>フッターテキスト</label>
+        <input type="text" id="footerInput" value="好評発売中！">
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="fullAnimInput">
+        <label for="fullAnimInput">アニメーションを最後まで再生する</label>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+        <div class="input-group">
+            <label>背景色</label>
+            <input type="color" id="bgColorInput" value="#ffffff">
+        </div>
+        <div class="input-group">
+            <label>文字色</label>
+            <input type="color" id="textColorInput" value="#333333">
+        </div>
+    </div>
+
+    <button id="generateBtn">動画を生成して保存</button>
+    <div id="status"></div>
+</div>
+
+<canvas id="exportCanvas" width="544" height="960" style="display:none;"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+    import { generateStampVideo } from './videoEncoder.js';
+
+    const btn = document.getElementById('generateBtn');
+    const status = document.getElementById('status');
+    const canvas = document.getElementById('exportCanvas');
+    const ctx = canvas.getContext('2d');
+
+    btn.addEventListener('click', async () => {
+        const inputFiles = document.getElementById('stampsInput').files;
+        if (inputFiles.length === 0) return alert('画像またはZIPファイルを選択してください');
+
+        btn.disabled = true;
+        status.innerText = 'ファイルを解析中...';
+
+        try {
+            let stampFiles = [];
+            const zip = new JSZip();
+
+            for (let file of inputFiles) {
+                if (file.name.endsWith('.zip')) {
+                    const loadedZip = await zip.loadAsync(file);
+                    const zippedEntries = [];
+                    loadedZip.forEach((path, entry) => {
+                        if (!entry.dir && /\.(png|apng|jpg|jpeg|webp)$/i.test(path) && !path.startsWith('__MACOSX')) {
+                            zippedEntries.push(entry);
+                        }
+                    });
+                    // ファイル名で自然順ソート
+                    zippedEntries.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+                    stampFiles.push(...zippedEntries);
+                } else {
+                    // 単体ファイルもJSZipエントリ風にラップ
+                    stampFiles.push({
+                        name: file.name,
+                        async: (type) => type === "arraybuffer" ? file.arrayBuffer() : file
+                    });
+                }
+            }
+
+            if (stampFiles.length === 0) throw new Error("画像が見つかりませんでした");
+
+            const mainImgFile = document.getElementById('mainImgInput').files[0];
+            const mainImg = mainImgFile ? await loadImage(URL.createObjectURL(mainImgFile)) : null;
+
+            const videoBlob = await generateStampVideo({
+                stampFiles,
+                mainImg,
+                title: document.getElementById('titleInput').value || 'Stamp Collection',
+                author: document.getElementById('authorInput').value || 'Author Name',
+                footer: document.getElementById('footerInput').value,
+                bgColor: document.getElementById('bgColorInput').value,
+                stampBgColor: '#f8f9fa',
+                textColor: document.getElementById('textColorInput').value,
+                fullAnim: document.getElementById('fullAnimInput').checked,
+                canvas, ctx
+            }, (curr, total) => {
+                status.innerText = `生成中: ${curr} / ${total}`;
+            });
+
+            const url = URL.createObjectURL(videoBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stamp_video_${Date.now()}.mp4`;
+            a.click();
+            status.innerText = '完了しました！';
+        } catch (e) {
+            console.error(e);
+            status.innerText = 'エラー: ' + e.message;
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    async function loadImage(url) {
+        return new Promise(res => {
+            const img = new Image();
+            img.onload = () => res(img);
+            img.src = url;
+        });
+    }
+</script>
+</body>
+</html>
