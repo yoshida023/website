@@ -5,43 +5,39 @@ import { UIHelper } from './modules/UIHelper.js';
 export const CONFIG_MOBILE = { width: 544, height: 960, fps: 30, bitrate: 1_200_000, codec: 'avc1.42E01E' };
 export const CONFIG_PC = { width: 540, height: 960, fps: 30, bitrate: 2_500_000, codec: 'avc1.4D401F' };
 
-/**
- * preBuild for hp2025: サイズ判定による動的レイアウト生成
- */
 export async function generateStampVideo(params, onProgress) {
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
     const config = isMobile ? CONFIG_MOBILE : CONFIG_PC;
     const { stampFiles, title, author, bgColor, stampBgColor, textColor, canvas, ctx } = params;
 
-    // 1. ソート処理
     const sortedFiles = [...stampFiles].sort((a, b) => {
         const numA = parseInt(a.name.match(/\d+/)?.[0] || 0);
         const numB = parseInt(b.name.match(/\d+/)?.[0] || 0);
         return numA - numB;
     });
 
-    // 2. APNG解析と絵文字判定
     const stampData = await Promise.all(sortedFiles.map(async (file) => {
         const buffer = await file.async("arraybuffer");
         const frames = await VideoCore.getRenderedFrames(buffer);
         const totalDuration = frames ? frames.reduce((acc, f) => acc + f.delay, 0) : 1000;
-        // フレームサイズを取得
         const width = frames ? frames[0].img.width : 0;
         return { frames, totalDuration, width };
     }));
 
-    // 3. 幅が180pxなら絵文字(7列)、それ以外はスタンプ(4列)
+    // 判定と配置設定
     const isEmoji = stampData.length > 0 && stampData[0].width === 180;
     const cols = isEmoji ? 7 : 4;
-    const cellWidth = config.width / cols;
-    const cellHeight = cellWidth;
+    
+    // アイテムの描画サイズと余白の計算
+    const itemSize = isEmoji ? 60 : 100; // 描画時のサイズ
+    const padding = (config.width - (itemSize * cols)) / (cols + 1); // 左右の余白を均等に
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
 
     const totalRows = Math.ceil(stampData.length / cols);
     const scrollDuration = 10;
     const totalFrames = scrollDuration * config.fps;
-    const scrollLimit = Math.max(0, (totalRows * cellHeight) - config.height + 250);
+    const scrollLimit = Math.max(0, (totalRows * (itemSize + padding)) - config.height + 250);
 
     for (let f = 0; f < totalFrames; f++) {
         if (f % 30 === 0 && onProgress) onProgress(f, totalFrames);
@@ -57,10 +53,12 @@ export async function generateStampVideo(params, onProgress) {
             const { frames, totalDuration } = stampData[i];
             const row = Math.floor(i / cols);
             const col = i % cols;
-            const x = col * cellWidth + (cellWidth * 0.05);
-            const y = (row * cellHeight) - offsetY + 200;
+            
+            // 均等配置の座標計算
+            const x = padding + (col * (itemSize + padding));
+            const y = (row * (itemSize + padding)) - offsetY + 200;
 
-            if (y > -cellHeight && y < config.height) {
+            if (y > -itemSize && y < config.height) {
                 const loopTime = currentTimeMs % totalDuration;
                 let acc = 0;
                 let activeFrame = frames[frames.length - 1].img;
@@ -71,11 +69,11 @@ export async function generateStampVideo(params, onProgress) {
                         break;
                     }
                 }
-                UIHelper.drawRoundedImage(ctx, activeFrame, x, y, cellWidth * 0.9, 10, stampBgColor);
+                UIHelper.drawRoundedImage(ctx, activeFrame, x, y, itemSize, 10, stampBgColor);
             }
         }
 
-        // タイトル背景（固定）
+        // タイトルエリア
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, 180);
         ctx.fillStyle = textColor;
