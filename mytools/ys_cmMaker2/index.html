@@ -10,7 +10,7 @@
         .panel { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box; }
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #666; }
-        input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; width: -webkit-fill-available; }
+        input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         .checkbox-group { display: flex; align-items: center; gap: 8px; margin: 15px 0; }
         .checkbox-group label { margin-bottom: 0; cursor: pointer; }
         .color-pickers { display: flex; gap: 10px; }
@@ -28,7 +28,7 @@
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (ハイブリッド版)</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
         <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="ヨシダスタジオ"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
@@ -51,15 +51,15 @@
         
         <div id="downloadArea">
             <video id="resultVideo" controls playsinline></video>
-            <a id="saveLink" class="save-button">📥 カメラロールに保存</a>
-            <div class="ios-instruction">iPhoneの方：ボタンで動画が開いたら、共有ボタン（↑）から「ビデオを保存」してください。</div>
+            <a id="saveLink" class="save-button">📥 動画を保存</a>
+            <div id="iosInstruction" class="ios-instruction" style="display:none">iPhoneの方：ボタンで動画が開いたら、共有ボタン（↑）から「ビデオを保存」してください。</div>
         </div>
     </div>
 
     <canvas id="exportCanvas" style="display:none"></canvas>
 
     <script type="module">
-        import { generateStampVideo, VIDEO_CONFIG } from './videoEncoder.js';
+        import { generateStampVideo, CONFIG_MOBILE, CONFIG_PC } from './videoEncoder.js';
 
         const generateBtn = document.getElementById('generateBtn');
         const status = document.getElementById('status');
@@ -76,37 +76,36 @@
                 generateBtn.disabled = true;
                 downloadArea.style.display = "none";
                 
+                const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+                const activeConfig = isMobile ? CONFIG_MOBILE : CONFIG_PC;
+                
+                // モードに合わせてキャンバスを初期化
+                canvas.width = activeConfig.width;
+                canvas.height = activeConfig.height;
+
                 const zip = await JSZip.loadAsync(zipFile);
                 const stampFiles = [];
                 let autoMainFile = null;
 
-                // ZIP内のファイルをスキャンして選別
-                const entries = [];
                 zip.forEach((path, file) => {
                     const name = path.split('/').pop().toLowerCase();
-                    // 1. 画像ファイルであり、かつMacOSの不要ファイルでないこと
                     if (!file.dir && name.match(/\.(png|apng|jpg|jpeg)$/i) && !path.startsWith('__MACOSX')) {
-                        // 2. メイン画像の候補（ファイル名にmainが含まれる）
                         if (name.includes('main')) {
                             autoMainFile = file;
-                        } 
-                        // 3. スタンプ本体（ファイル名が数字から始まるもののみ対象）
-                        else if (name.match(/^\d+/)) {
-                            entries.push({ name, file });
+                        } else if (name.match(/^\d+/)) {
+                            stampFiles.push(file);
                         }
                     }
                 });
 
                 // 数字順にソート
-                entries.sort((a, b) => {
-                    const numA = parseInt(a.name.match(/^\d+/)[0]);
-                    const numB = parseInt(b.name.match(/^\d+/)[0]);
+                stampFiles.sort((a, b) => {
+                    const numA = parseInt(a.name.match(/\d+/)[0]);
+                    const numB = parseInt(b.name.match(/\d+/)[0]);
                     return numA - numB;
                 });
 
-                entries.forEach(item => stampFiles.push(item.file));
-
-                if (stampFiles.length === 0) throw new Error("数字から始まるスタンプ画像が見つかりませんでした");
+                if (stampFiles.length === 0) throw new Error("対象のスタンプ画像が見つかりませんでした");
 
                 let mainImg = null;
                 const mainImgFile = document.getElementById('mainImgInput').files[0];
@@ -123,9 +122,6 @@
                     return ((r*299)+(g*587)+(b*114))/1000 >= 128 ? '#000000' : '#ffffff';
                 })(bgColor);
 
-                canvas.width = VIDEO_CONFIG.width;
-                canvas.height = VIDEO_CONFIG.height;
-
                 const blob = await generateStampVideo({
                     stampFiles, 
                     mainImg, 
@@ -138,7 +134,7 @@
                     fullAnim: document.getElementById('fullAnimInput').checked,
                     canvas, ctx
                 }, (current, total) => {
-                    status.innerText = `生成中: ${current} / ${total}`;
+                    status.innerText = `生成中 (${isMobile ? 'スマホ' : 'PC'}モード): ${current} / ${total}`;
                     progress.value = (current / total) * 100;
                 });
 
@@ -146,6 +142,8 @@
                 document.getElementById('resultVideo').src = url;
                 document.getElementById('saveLink').href = url;
                 document.getElementById('saveLink').download = `stamp_video_${Date.now()}.mp4`;
+                
+                document.getElementById('iosInstruction').style.display = isMobile ? "block" : "none";
                 downloadArea.style.display = "block";
                 status.innerText = "生成完了！";
             } catch (err) {
