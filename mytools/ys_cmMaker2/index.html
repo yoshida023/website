@@ -28,7 +28,7 @@
 <body>
 
     <div class="panel">
-        <h3 style="margin:0 0 15px 0">スタンプ動画生成 (ハイブリッド版)</h3>
+        <h3 style="margin:0 0 15px 0">スタンプ動画生成</h3>
         <div class="input-group"><label>タイトル</label><input type="text" id="titleInput" value="LINEスタンプ発売中！"></div>
         <div class="input-group"><label>作者名</label><input type="text" id="authorInput" value="ヨシダスタジオ"></div>
         <div class="input-group"><label>フッター</label><input type="text" id="footerInput" value="購入はプロフィールのURLへ！"></div>
@@ -79,7 +79,6 @@
                 const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
                 const activeConfig = isMobile ? CONFIG_MOBILE : CONFIG_PC;
                 
-                // モードに合わせてキャンバスを初期化
                 canvas.width = activeConfig.width;
                 canvas.height = activeConfig.height;
 
@@ -90,22 +89,18 @@
                 zip.forEach((path, file) => {
                     const name = path.split('/').pop().toLowerCase();
                     if (!file.dir && name.match(/\.(png|apng|jpg|jpeg)$/i) && !path.startsWith('__MACOSX')) {
-                        if (name.includes('main')) {
-                            autoMainFile = file;
-                        } else if (name.match(/^\d+/)) {
-                            stampFiles.push(file);
-                        }
+                        if (name.includes('main')) autoMainFile = file;
+                        else if (name.match(/^\d+/)) stampFiles.push(file);
                     }
                 });
 
-                // 数字順にソート
                 stampFiles.sort((a, b) => {
-                    const numA = parseInt(a.name.match(/\d+/)[0]);
-                    const numB = parseInt(b.name.match(/\d+/)[0]);
+                    const numA = parseInt(a.name.match(/^\d+/)[0]);
+                    const numB = parseInt(b.name.match(/^\d+/)[0]);
                     return numA - numB;
                 });
 
-                if (stampFiles.length === 0) throw new Error("対象のスタンプ画像が見つかりませんでした");
+                if (stampFiles.length === 0) throw new Error("対象の画像が見つかりませんでした");
 
                 let mainImg = null;
                 const mainImgFile = document.getElementById('mainImgInput').files[0];
@@ -123,8 +118,7 @@
                 })(bgColor);
 
                 const blob = await generateStampVideo({
-                    stampFiles, 
-                    mainImg, 
+                    stampFiles, mainImg, 
                     title: document.getElementById('titleInput').value,
                     author: document.getElementById('authorInput').value,
                     footer: document.getElementById('footerInput').value,
@@ -142,7 +136,6 @@
                 document.getElementById('resultVideo').src = url;
                 document.getElementById('saveLink').href = url;
                 document.getElementById('saveLink').download = `stamp_video_${Date.now()}.mp4`;
-                
                 document.getElementById('iosInstruction').style.display = isMobile ? "block" : "none";
                 downloadArea.style.display = "block";
                 status.innerText = "生成完了！";
