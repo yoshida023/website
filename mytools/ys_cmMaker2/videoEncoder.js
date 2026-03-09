@@ -3,7 +3,11 @@ import parseAPNG from 'https://cdn.skypack.dev/apng-js';
 import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
 
 export const VIDEO_CONFIG = {
-    width: 544, height: 960, fps: 30, bitrate: 1_200_000, codec: 'avc1.42E01E' 
+    width: 544, 
+    height: 960,
+    fps: 30,
+    bitrate: 1_500_000, // PC版の安定したビットレート寄りに調整
+    codec: 'avc1.42E01E' // 互換性重視（iPhone/PC両対応）
 };
 
 function fillSingleLineTextAutoFit(ctx, text, x, y, maxWidth, fontSize) {
@@ -23,52 +27,67 @@ function fillSingleLineTextAutoFit(ctx, text, x, y, maxWidth, fontSize) {
 
 export async function generateStampVideo(params, onProgress) {
     const { stampFiles, mainImg, title, author, footer, bgColor, stampBgColor, textColor, fullAnim, canvas, ctx } = params;
+    
     let muxer = new Muxer({
         target: new ArrayBufferTarget(),
         video: { codec: 'avc', width: VIDEO_CONFIG.width, height: VIDEO_CONFIG.height },
         fastStart: 'in-memory'
     });
+
     let encoder = new VideoEncoder({
         output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-        error: (e) => { throw new Error("Encoding failed: " + e.message); }
+        error: (e) => { console.error(e); }
     });
+
     encoder.configure({ 
-        codec: VIDEO_CONFIG.codec, width: VIDEO_CONFIG.width, height: VIDEO_CONFIG.height, 
-        bitrate: VIDEO_CONFIG.bitrate, framerate: VIDEO_CONFIG.fps, latencyMode: 'realtime'
+        codec: VIDEO_CONFIG.codec, 
+        width: VIDEO_CONFIG.width, 
+        height: VIDEO_CONFIG.height, 
+        bitrate: VIDEO_CONFIG.bitrate, 
+        framerate: VIDEO_CONFIG.fps
     });
-    while (encoder.state !== "configured") await new Promise(r => setTimeout(r, 100));
+
     let frameCount = 0;
+
     for (let i = 0; i < stampFiles.length; i++) {
         if (onProgress) onProgress(i + 1, stampFiles.length);
         const buffer = await stampFiles[i].async("arraybuffer");
         let frames = await getRenderedFrames(buffer);
+        
         if (!frames) {
-            const blob = new Blob([buffer]);
+            const blob = await stampFiles[i].async("blob");
             const img = await loadImage(URL.createObjectURL(blob));
             if (img) frames = [{ img, delay: 1000 }];
         }
         if (!frames) continue;
+
         let stampTime = 0;
         const totalApngMs = frames.reduce((a, b) => a + b.delay, 0) || 1000;
         const durationLimit = fullAnim ? (totalApngMs / 1000) : 1.0;
+
         while (stampTime < durationLimit) {
-            while (encoder.encodeQueueSize > 0) await new Promise(r => setTimeout(r, 10));
+            // PCでの安定性を高めるため、キュー管理を厳密化
+            while (encoder.encodeQueueSize > 5) await new Promise(r => setTimeout(r, 10));
+
             drawUI(ctx, { 
                 title, author, footer, mainImg, bgColor, stampBgColor, textColor, 
                 targetFrame: getFrameAtTime(frames, stampTime, totalApngMs), 
                 index: i + 1 
             });
+
             const vFrame = new VideoFrame(canvas, { 
                 timestamp: (frameCount++ * 1000000) / VIDEO_CONFIG.fps, 
                 duration: 1000000 / VIDEO_CONFIG.fps 
             });
             encoder.encode(vFrame);
             vFrame.close();
+            
             stampTime += 1 / VIDEO_CONFIG.fps;
-            await new Promise(r => setTimeout(r, 1)); 
         }
+        // 5スタンプごとに強制フラッシュ（PC・スマホ共通の安定化策）
         if (i % 5 === 0) await encoder.flush();
     }
+
     await encoder.flush();
     muxer.finalize();
     return new Blob([muxer.target.buffer], { type: 'video/mp4' });
@@ -173,3 +192,4 @@ async function loadImage(url) {
         img.src = url;
     });
 }
+
