@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>preBuild for hp2025 - 動画生成ツール</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        input, textarea { display: block; width: 100%; margin-top: 5px; }
+        #canvas-preview { width: 360px; height: 640px; border: 2px solid #333; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>preBuild for hp2025 動画生成</h1>
+    
+    <div class="form-group">
+        <label>スタンプZIPファイル:</label>
+        <input type="file" id="zipInput" accept=".zip">
+    </div>
+    <div class="form-group">
+        <label>タイトル:</label>
+        <input type="text" id="title" value="My Stickers">
+    </div>
+    <div class="form-group">
+        <label>作者名:</label>
+        <input type="text" id="author" value="Creator Name">
+    </div>
+    <div class="form-group">
+        <label>コメント:</label>
+        <textarea id="comment">素敵なスタンプを使ってみてね！</textarea>
+    </div>
+    <button id="generateBtn">動画を生成して保存</button>
+
+    <canvas id="canvas-preview" style="display:none;"></canvas>
+
+    <script type="module">
+        import { VideoCore } from './modules/VideoCore.js';
+        import { UIHelper } from './modules/UIHelper.js';
+
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('zipInput');
+            if (!fileInput.files.length) return alert('ZIPを選択してください');
+
+            const metaData = {
+                title: document.getElementById('title').value,
+                author: document.getElementById('author').value,
+                comment: document.getElementById('comment').value
+            };
+
+            const buffer = await fileInput.files[0].arrayBuffer();
+            const renderedFrames = await VideoCore.getRenderedFrames(buffer);
+            
+            // 設定: 4列10行を想定
+            const config = { width: 1080, height: 1920, cols: 4, fps: 30, bitrate: 5000000, codec: 'avc1.42E01E' };
+            const { muxer, encoder } = await VideoCore.createEncoder(config, false);
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = config.width;
+            canvas.height = config.height;
+            const ctx = canvas.getContext('2d');
+
+            // 動画生成ループ (約10秒)
+            for (let i = 0; i < 300; i++) {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, 1080, 1920);
+
+                const scrollY = (i / 300) * (renderedFrames.length * 50);
+                
+                // スタンプ描画
+                renderedFrames.forEach((f, idx) => {
+                    const x = 100 + (idx % 4) * 230;
+                    const y = 400 + Math.floor(idx / 4) * 230 - scrollY;
+                    if (y > 0 && y < 1500) ctx.drawImage(f.img, x, y, 200, 200);
+                });
+
+                // UIHelper利用
+                UIHelper.drawTextFit(ctx, metaData.title, 540, 50, 800, 80, '#000');
+                UIHelper.drawTextFit(ctx, metaData.author, 540, 150, 600, 40, '#666');
+                UIHelper.drawTextWrap(ctx, metaData.comment, 540, 1700, 900, 30, '#333');
+
+                const frame = new VideoFrame(canvas, { timestamp: i * 33333 });
+                encoder.encode(frame);
+                frame.close();
+            }
+
+            await encoder.flush();
+            
+            // ダウンロード処理
+            const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'preBuild_preview.mp4';
+            a.click();
+        });
+    </script>
+</body>
+</html>
