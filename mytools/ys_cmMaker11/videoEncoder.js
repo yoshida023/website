@@ -27,12 +27,9 @@ export async function generateStampVideo(params, onProgress) {
     const isEmoji = stampData.length > 0 && stampData[0].width === 180;
     const cols = isEmoji ? 7 : 4;
     
-    // セルあたりの幅を計算（画面幅を列数で割る）
+    // セル幅を計算し、アイテムサイズをセルと同一（余白なし）にする
     const cellWidth = config.width / cols;
-    // セル内に収まる最大サイズ（余白を10%確保）
-    const itemSize = cellWidth * 0.9;
-    // セル中央に配置するためのオフセット
-    const offsetX = (cellWidth - itemSize) / 2;
+    const itemSize = cellWidth; 
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
 
@@ -56,7 +53,8 @@ export async function generateStampVideo(params, onProgress) {
             const row = Math.floor(i / cols);
             const col = i % cols;
             
-            const x = (col * cellWidth) + offsetX;
+            // 座標計算（余白なしで隣接させる）
+            const x = col * cellWidth;
             const y = (row * cellWidth) - offsetY + 200;
 
             if (y > -cellWidth && y < config.height) {
@@ -70,11 +68,13 @@ export async function generateStampVideo(params, onProgress) {
                         break;
                     }
                 }
-                UIHelper.drawRoundedImage(ctx, activeFrame, x, y, itemSize, 10, stampBgColor);
+                // UIHelper.drawRoundedImageを呼び出している箇所を、
+                // 今回はシンプルに ctx.drawImage で最大表示するように調整可能です
+                ctx.drawImage(activeFrame, x, y, itemSize, itemSize);
             }
         }
 
-        // タイトル背景（固定）
+        // タイトルエリア
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, 180);
         ctx.fillStyle = textColor;
