@@ -7,7 +7,7 @@ export const CONFIG_PC = { width: 540, height: 960, fps: 30, bitrate: 2_500_000,
 export async function generateStampVideo(params, onProgress) {
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
     const config = isMobile ? CONFIG_MOBILE : CONFIG_PC;
-    const { stampFiles, title, author, bgColor, stampBgColor, textColor, canvas, ctx } = params;
+    const { stampFiles, title, bgColor, stampBgColor, textColor, canvas, ctx } = params;
 
     const sortedFiles = [...stampFiles].sort((a, b) => {
         const numA = parseInt(a.name.match(/\d+/)?.[0] || 0);
@@ -19,70 +19,73 @@ export async function generateStampVideo(params, onProgress) {
         const buffer = await file.async("arraybuffer");
         const frames = await VideoCore.getRenderedFrames(buffer);
         const totalDuration = frames ? frames.reduce((acc, f) => acc + f.delay, 0) : 1000;
-        const width = frames ? frames[0].img.width : 0;
-        return { frames, totalDuration, width };
+        const img = frames ? frames[0].img : null;
+        return { frames, totalDuration, img };
     }));
 
-    const isEmoji = stampData.length > 0 && stampData[0].width === 180;
+    // 判定: 幅180pxなら絵文字(7列)、それ以外はスタンプ(4列)
+    const isEmoji = stampData.length > 0 && stampData[0].img?.width === 180;
     const cols = isEmoji ? 7 : 4;
     const cellWidth = config.width / cols;
-    const padding = 10; // 枠線とアイテムの隙間
-    const itemSize = cellWidth - (padding * 2);
+    const cellHeight = cellWidth; // セルの高さは維持
+    const padding = 12; // 枠との隙間
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
-
-    // スクロールせず、全フレームを静止画として一定時間出力する
-    const totalFrames = 90; // 3秒間固定表示
+    const totalFrames = 90; // 3秒間固定
 
     for (let f = 0; f < totalFrames; f++) {
-        if (f % 10 === 0 && onProgress) onProgress(f, totalFrames);
-
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, config.height);
 
         for (let i = 0; i < stampData.length; i++) {
-            const { frames, totalDuration } = stampData[i];
+            const { frames, totalDuration, img } = stampData[i];
+            if (!img) continue;
+
             const row = Math.floor(i / cols);
             const col = i % cols;
-            const x = (col * cellWidth) + padding;
-            const y = (row * cellWidth) + 200 + padding; // タイトル分下げる
+            const cellX = col * cellWidth;
+            const cellY = (row * cellHeight) + 200;
 
-            // アニメーションフレームの計算
-            const currentTimeMs = (f / config.fps) * 1000;
-            const loopTime = currentTimeMs % totalDuration;
+            // アスペクト比を維持した拡大計算
+            const availableW = cellWidth - (padding * 2);
+            const availableH = cellHeight - (padding * 2);
+            const ratio = Math.min(availableW / img.width, availableH / img.height);
+            const drawW = img.width * ratio;
+            const drawH = img.height * ratio;
+            
+            // セル内中央寄せ
+            const drawX = cellX + (cellWidth - drawW) / 2;
+            const drawY = cellY + (cellHeight - drawH) / 2;
+
+            // アニメーションフレーム計算
+            const loopTime = ((f / config.fps) * 1000) % totalDuration;
             let acc = 0;
             let activeFrame = frames[frames.length - 1].img;
             for (const frame of frames) {
                 acc += frame.delay;
-                if (loopTime < acc) {
-                    activeFrame = frame.img;
-                    break;
-                }
+                if (loopTime < acc) { activeFrame = frame.img; break; }
             }
 
-            // 1. スタンプの角丸背景・枠線描画
+            // 角丸枠線と描画
             ctx.save();
             ctx.beginPath();
-            ctx.roundRect(x, y, itemSize, itemSize, 12);
+            ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 12);
             ctx.fillStyle = stampBgColor;
             ctx.fill();
-            ctx.strokeStyle = "rgba(0,0,0,0.15)"; // 薄い線
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = "rgba(0,0,0,0.1)";
             ctx.stroke();
-            ctx.clip(); // はみ出し防止
-
-            // 2. 画像描画
-            ctx.drawImage(activeFrame, x, y, itemSize, itemSize);
+            ctx.clip();
+            ctx.drawImage(activeFrame, drawX, drawY, drawW, drawH);
             ctx.restore();
         }
 
-        // タイトル表示
+        // タイトル
         ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, config.width, 180);
+        ctx.fillRect(0, 0, config.width, 200);
         ctx.fillStyle = textColor;
         ctx.font = "bold 32px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(title, config.width / 2, 80);
+        ctx.fillText(title, config.width / 2, 100);
 
         const vFrame = new VideoFrame(canvas, { 
             timestamp: (f * 1000000) / config.fps, 
