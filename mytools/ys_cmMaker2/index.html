@@ -80,22 +80,33 @@
                 const stampFiles = [];
                 let autoMainFile = null;
 
-                // ZIP内のファイルをスキャン
+                // ZIP内のファイルをスキャンして選別
                 const entries = [];
                 zip.forEach((path, file) => {
-                    const name = path.split('/').pop();
+                    const name = path.split('/').pop().toLowerCase();
+                    // 1. 画像ファイルであり、かつMacOSの不要ファイルでないこと
                     if (!file.dir && name.match(/\.(png|apng|jpg|jpeg)$/i) && !path.startsWith('__MACOSX')) {
-                        entries.push({ name, file });
+                        // 2. メイン画像の候補（ファイル名にmainが含まれる）
+                        if (name.includes('main')) {
+                            autoMainFile = file;
+                        } 
+                        // 3. スタンプ本体（ファイル名が数字から始まるもののみ対象）
+                        else if (name.match(/^\d+/)) {
+                            entries.push({ name, file });
+                        }
                     }
                 });
 
-                // ソート処理（数字が含まれる場合は数値順）
-                entries.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
-
-                entries.forEach(item => {
-                    if (item.name.toLowerCase().startsWith('main')) autoMainFile = item.file;
-                    else stampFiles.push(item.file);
+                // 数字順にソート
+                entries.sort((a, b) => {
+                    const numA = parseInt(a.name.match(/^\d+/)[0]);
+                    const numB = parseInt(b.name.match(/^\d+/)[0]);
+                    return numA - numB;
                 });
+
+                entries.forEach(item => stampFiles.push(item.file));
+
+                if (stampFiles.length === 0) throw new Error("数字から始まるスタンプ画像が見つかりませんでした");
 
                 let mainImg = null;
                 const mainImgFile = document.getElementById('mainImgInput').files[0];
