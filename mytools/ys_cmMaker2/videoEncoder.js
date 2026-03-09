@@ -2,21 +2,16 @@
 import parseAPNG from 'https://cdn.skypack.dev/apng-js';
 import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
 
-// モバイル：iOSで安定していた Baseline Profile と 16の倍数(544) を使用
 export const CONFIG_MOBILE = {
     width: 544, height: 960, fps: 30, bitrate: 1_200_000, 
     codec: 'avc1.42E01E' 
 };
 
-// PC：安定していた High Profile と 540px を使用
 export const CONFIG_PC = {
     width: 540, height: 960, fps: 30, bitrate: 2_500_000, 
     codec: 'avc1.4D401F' 
 };
 
-/**
- * 幅に合わせて1行に縮小描画
- */
 function drawSingleLineTextFit(ctx, text, x, y, maxWidth, initialFontSize) {
     ctx.save();
     let fontSize = initialFontSize;
@@ -48,14 +43,12 @@ export async function generateStampVideo(params, onProgress) {
         error: (e) => { throw new Error("Encoding failed: " + e.message); }
     });
 
-    // モバイルでは latencyMode: 'realtime' を指定して安定化
     encoder.configure({ 
         codec: config.codec, width: config.width, height: config.height, 
         bitrate: config.bitrate, framerate: config.fps,
         latencyMode: isMobile ? 'realtime' : 'quality'
     });
 
-    // 【重要】スマホでの「not configured」を防ぐため、設定完了を待機
     let waitCount = 0;
     while (encoder.state !== "configured" && waitCount < 20) {
         await new Promise(r => setTimeout(r, 100));
@@ -81,7 +74,6 @@ export async function generateStampVideo(params, onProgress) {
         const durationLimit = fullAnim ? (totalApngMs / 1000) : 1.0;
 
         while (stampTime < durationLimit) {
-            // エンコーダーのキューが空くのを待つ
             while (encoder.encodeQueueSize > 2) await new Promise(r => setTimeout(r, 10));
 
             drawUI(ctx, config, { 
@@ -99,7 +91,6 @@ export async function generateStampVideo(params, onProgress) {
             
             stampTime += 1 / config.fps;
         }
-        // スタンプごとにフラッシュしてメモリを解放（スマホの安定化に必須）
         await encoder.flush();
     }
 
@@ -108,26 +99,65 @@ export async function generateStampVideo(params, onProgress) {
     return new Blob([muxer.target.buffer], { type: 'video/mp4' });
 }
 
+/**
+ * APNGの合成ルールに従って全フレームをレンダリングする
+ */
 async function getRenderedFrames(buffer) {
     try {
         const apng = parseAPNG(buffer);
         if (apng instanceof Error) return null;
         await apng.createImages();
+
         const renderedFrames = [];
+        const width = apng.width;
+        const height = apng.height;
+
+        // メインの作業用キャンバス
         const workCanvas = document.createElement('canvas');
-        workCanvas.width = apng.width; workCanvas.height = apng.height;
+        workCanvas.width = width; workCanvas.height = height;
         const workCtx = workCanvas.getContext('2d');
+
+        // disposeOp: 2 (前の状態に戻す) 用のバックアップキャンバス
+        const backCanvas = document.createElement('canvas');
+        backCanvas.width = width; backCanvas.height = height;
+        const backCtx = backCanvas.getContext('2d');
+
         for (const frame of apng.frames) {
-            // APNGの透明度や重なりを考慮した描画
-            if (frame.disposeOp === 1 || frame.blendOp === 0) workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+            // 描画前の保存 (disposeOp === 2 のため)
+            if (frame.disposeOp === 2) {
+                backCtx.clearRect(0, 0, width, height);
+                backCtx.drawImage(workCanvas, 0, 0);
+            }
+
+            // blendOp === 0 (Source): 描画エリアをクリアしてから描画
+            if (frame.blendOp === 0) {
+                workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+            }
+            // blendOp === 1 (Over) の場合はクリアせずそのまま上書き
+
             workCtx.drawImage(frame.imageElement, frame.left, frame.top);
+
+            // 現在の状態をスナップショットとして保存
             const snapshot = document.createElement('canvas');
-            snapshot.width = apng.width; snapshot.height = apng.height;
+            snapshot.width = width; snapshot.height = height;
             snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
             renderedFrames.push({ img: snapshot, delay: frame.delay });
+
+            // disposeOp (描画後の処理)
+            if (frame.disposeOp === 1) {
+                // 背景色（透明）でクリア
+                workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+            } else if (frame.disposeOp === 2) {
+                // 前の状態に復元
+                workCtx.clearRect(0, 0, width, height);
+                workCtx.drawImage(backCanvas, 0, 0);
+            }
         }
         return renderedFrames;
-    } catch (e) { return null; }
+    } catch (e) { 
+        console.error("APNG Render Error:", e);
+        return null; 
+    }
 }
 
 function getFrameAtTime(frames, stampTime, totalApngMs) {
