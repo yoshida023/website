@@ -100,7 +100,8 @@ export async function generateStampVideo(params, onProgress) {
 }
 
 /**
- * APNGの合成ルールに従って全フレームをレンダリングする
+ * APNGレンダリングロジック（修正版）
+ * 前の状態の保存・復元をより厳密に行います
  */
 async function getRenderedFrames(buffer) {
     try {
@@ -109,48 +110,48 @@ async function getRenderedFrames(buffer) {
         await apng.createImages();
 
         const renderedFrames = [];
-        const width = apng.width;
-        const height = apng.height;
+        const { width, height } = apng;
 
-        // メインの作業用キャンバス
-        const workCanvas = document.createElement('canvas');
-        workCanvas.width = width; workCanvas.height = height;
-        const workCtx = workCanvas.getContext('2d');
+        // 実際に描画を進めるキャンバス
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
 
-        // disposeOp: 2 (前の状態に戻す) 用のバックアップキャンバス
-        const backCanvas = document.createElement('canvas');
-        backCanvas.width = width; backCanvas.height = height;
-        const backCtx = backCanvas.getContext('2d');
+        // disposeOp: 2 (Restore to previous) 用のバックアップ
+        const prevCanvas = document.createElement('canvas');
+        prevCanvas.width = width; prevCanvas.height = height;
+        const prevCtx = prevCanvas.getContext('2d');
 
-        for (const frame of apng.frames) {
-            // 描画前の保存 (disposeOp === 2 のため)
+        for (let i = 0; i < apng.frames.length; i++) {
+            const frame = apng.frames[i];
+
+            // 1. 描画前の処理 (disposeOp: 2 の準備)
             if (frame.disposeOp === 2) {
-                backCtx.clearRect(0, 0, width, height);
-                backCtx.drawImage(workCanvas, 0, 0);
+                prevCtx.clearRect(0, 0, width, height);
+                prevCtx.drawImage(canvas, 0, 0);
             }
 
-            // blendOp === 0 (Source): 描画エリアをクリアしてから描画
+            // 2. 合成 (blendOp)
+            // blendOp: 0 (Source) なら領域をクリア、1 (Over) ならそのまま描画
             if (frame.blendOp === 0) {
-                workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+                ctx.clearRect(frame.left, frame.top, frame.width, frame.height);
             }
-            // blendOp === 1 (Over) の場合はクリアせずそのまま上書き
+            ctx.drawImage(frame.imageElement, frame.left, frame.top);
 
-            workCtx.drawImage(frame.imageElement, frame.left, frame.top);
-
-            // 現在の状態をスナップショットとして保存
+            // 3. 現在のフレームを記録
             const snapshot = document.createElement('canvas');
             snapshot.width = width; snapshot.height = height;
-            snapshot.getContext('2d').drawImage(workCanvas, 0, 0);
+            snapshot.getContext('2d').drawImage(canvas, 0, 0);
             renderedFrames.push({ img: snapshot, delay: frame.delay });
 
-            // disposeOp (描画後の処理)
+            // 4. 描画後の処理 (disposeOp)
             if (frame.disposeOp === 1) {
-                // 背景色（透明）でクリア
-                workCtx.clearRect(frame.left, frame.top, frame.width, frame.height);
+                // 領域を透明にクリア
+                ctx.clearRect(frame.left, frame.top, frame.width, frame.height);
             } else if (frame.disposeOp === 2) {
-                // 前の状態に復元
-                workCtx.clearRect(0, 0, width, height);
-                workCtx.drawImage(backCanvas, 0, 0);
+                // 前の状態（prevCanvas）に戻す
+                ctx.clearRect(0, 0, width, height);
+                ctx.drawImage(prevCanvas, 0, 0);
             }
         }
         return renderedFrames;
