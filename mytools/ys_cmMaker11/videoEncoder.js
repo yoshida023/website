@@ -24,20 +24,22 @@ export async function generateStampVideo(params, onProgress) {
         return { frames, totalDuration, width };
     }));
 
-    // 判定と配置設定
     const isEmoji = stampData.length > 0 && stampData[0].width === 180;
     const cols = isEmoji ? 7 : 4;
     
-    // アイテムの描画サイズと余白の計算
-    const itemSize = isEmoji ? 60 : 100; // 描画時のサイズ
-    const padding = (config.width - (itemSize * cols)) / (cols + 1); // 左右の余白を均等に
+    // セルあたりの幅を計算（画面幅を列数で割る）
+    const cellWidth = config.width / cols;
+    // セル内に収まる最大サイズ（余白を10%確保）
+    const itemSize = cellWidth * 0.9;
+    // セル中央に配置するためのオフセット
+    const offsetX = (cellWidth - itemSize) / 2;
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
 
     const totalRows = Math.ceil(stampData.length / cols);
     const scrollDuration = 10;
     const totalFrames = scrollDuration * config.fps;
-    const scrollLimit = Math.max(0, (totalRows * (itemSize + padding)) - config.height + 250);
+    const scrollLimit = Math.max(0, (totalRows * cellWidth) - config.height + 250);
 
     for (let f = 0; f < totalFrames; f++) {
         if (f % 30 === 0 && onProgress) onProgress(f, totalFrames);
@@ -54,11 +56,10 @@ export async function generateStampVideo(params, onProgress) {
             const row = Math.floor(i / cols);
             const col = i % cols;
             
-            // 均等配置の座標計算
-            const x = padding + (col * (itemSize + padding));
-            const y = (row * (itemSize + padding)) - offsetY + 200;
+            const x = (col * cellWidth) + offsetX;
+            const y = (row * cellWidth) - offsetY + 200;
 
-            if (y > -itemSize && y < config.height) {
+            if (y > -cellWidth && y < config.height) {
                 const loopTime = currentTimeMs % totalDuration;
                 let acc = 0;
                 let activeFrame = frames[frames.length - 1].img;
@@ -73,7 +74,7 @@ export async function generateStampVideo(params, onProgress) {
             }
         }
 
-        // タイトルエリア
+        // タイトル背景（固定）
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, 180);
         ctx.fillStyle = textColor;
