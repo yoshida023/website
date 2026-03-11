@@ -3,48 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TileCraft - MP4 Custom BG</title>
+    <title>TileCraft - Animated MP4</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/apng-js@1.1.1/dist/index.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; color: #333; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        
-        /* 設定エリア */
-        .settings { display: flex; align-items: center; gap: 15px; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
-        .color-input { width: 50px; height: 40px; border: none; cursor: pointer; background: none; }
-        
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 10px; margin: 15px 0; max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
-        .item { cursor: pointer; position: relative; }
+        .settings { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 8px; font-size: 14px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin: 15px 0; max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
+        .item { cursor: pointer; text-align: center; font-size: 10px; }
         .item img { width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 6px; background: #eee; border: 2px solid transparent; }
         .item.selected img { border-color: #007aff; background: #eef6ff; }
-        
         .btn { display: block; width: 100%; padding: 16px; background: #007aff; color: white; border: none; border-radius: 12px; font-weight: bold; font-size: 16px; }
         .btn:disabled { background: #cbd5e0; }
-        
         .result-list { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
         .result-item { background: white; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        video { width: 70px; height: 70px; border-radius: 6px; }
-        .result-info { flex: 1; font-size: 14px; overflow: hidden; }
+        video { width: 80px; height: 80px; border-radius: 6px; }
         .dl-btn { background: #34c759; color: white; text-decoration: none; padding: 8px 15px; border-radius: 8px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3 style="margin:0 0 10px 0">1. ZIPを選択</h3>
+    <h3 style="margin:0 0 10px 0">1. ZIPをアップロード</h3>
     <input type="file" id="zipInput" accept=".zip">
 </div>
 
 <div id="selector-card" class="card" style="display:none">
     <h3 style="margin:0">2. 動画設定と画像選択</h3>
     <div class="settings">
-        <label for="bgColor">背景色:</label>
-        <input type="color" id="bgColor" class="color-input" value="#00FF00">
-        <span id="colorCode" style="font-size:12px; font-family:monospace;">#00FF00</span>
+        背景色: <input type="color" id="bgColor" value="#00FF00">
+        FPS: <input type="number" id="fpsInput" value="10" style="width:50px">
     </div>
-    
     <div class="grid" id="imageGrid"></div>
-    <button id="generateBtn" class="btn" disabled>MP4動画を生成</button>
+    <button id="generateBtn" class="btn" disabled>アニメーションMP4を生成</button>
 </div>
 
 <div id="result-container" class="result-list"></div>
@@ -52,11 +44,6 @@
 <script>
 let allImageData = []; 
 let selectedIndices = new Set();
-
-const bgColorInput = document.getElementById('bgColor');
-bgColorInput.oninput = (e) => {
-    document.getElementById('colorCode').innerText = e.target.value.toUpperCase();
-};
 
 document.getElementById('zipInput').onchange = async (e) => {
     const file = e.target.files[0];
@@ -73,13 +60,15 @@ document.getElementById('zipInput').onchange = async (e) => {
     selectedIndices.clear();
 
     for (let i = 0; i < files.length; i++) {
-        const blob = await zip.files[files[i]].async("blob");
+        const buffer = await zip.files[files[i]].async("arraybuffer");
+        const blob = new Blob([buffer], { type: "image/png" });
         const url = URL.createObjectURL(blob);
-        allImageData.push({ name: files[i], blob, url });
+        
+        allImageData.push({ name: files[i], buffer, url });
 
         const div = document.createElement('div');
         div.className = 'item';
-        div.innerHTML = `<img src="${url}">`;
+        div.innerHTML = `<img src="${url}"><div>${files[i]}</div>`;
         div.onclick = () => {
             if (selectedIndices.has(i)) {
                 selectedIndices.delete(i);
@@ -89,93 +78,94 @@ document.getElementById('zipInput').onchange = async (e) => {
                 div.classList.add('selected');
             }
             document.getElementById('generateBtn').disabled = selectedIndices.size === 0;
-            document.getElementById('generateBtn').innerText = `${selectedIndices.size}個のMP4を生成`;
+            document.getElementById('generateBtn').innerText = `${selectedIndices.size}個のアニメ生成`;
         };
         grid.appendChild(div);
     }
     document.getElementById('selector-card').style.display = 'block';
 };
 
-async function createSingleMp4(idx, bgColor) {
+async function createAnimatedMp4(idx) {
     const item = allImageData[idx];
-    const img = await createImageBitmap(item.blob);
+    const bgColor = document.getElementById('bgColor').value;
+    const fps = parseInt(document.getElementById('fpsInput').value) || 10;
     
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = img.width; tempCanvas.height = img.height;
-    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-    tempCtx.drawImage(img, 0, 0);
-    const data = tempCtx.getImageData(0, 0, img.width, img.height).data;
+    // APNG解析
+    const apng = apngjs.parse(item.buffer);
+    await apng.createImages();
     
-    let minX = img.width, minY = img.height, maxX = 0, maxY = 0, hasAlpha = false;
-    for (let i = 3; i < data.length; i += 4) {
-        if (data[i] > 0) {
-            const x = (i / 4) % img.width; const y = Math.floor((i / 4) / img.width);
-            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-            hasAlpha = true;
+    // 全フレームの共通サイズ（余白カット）を計算
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let minX = apng.width, minY = apng.height, maxX = 0, maxY = 0;
+
+    for (const frame of apng.frames) {
+        canvas.width = apng.width; canvas.height = apng.height;
+        ctx.clearRect(0,0,apng.width,apng.height);
+        ctx.drawImage(frame.imageElement, frame.left, frame.top);
+        const data = ctx.getImageData(0,0,apng.width,apng.height).data;
+        for(let i=3; i<data.length; i+=4) {
+            if(data[i] > 0) {
+                const x = (i/4)%apng.width; const y = Math.floor((i/4)/apng.width);
+                minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+            }
         }
     }
+    const w = maxX - minX + 1; const h = maxY - minY + 1;
 
-    const w = hasAlpha ? (maxX - minX + 1) : img.width;
-    const h = hasAlpha ? (maxY - minY + 1) : img.height;
-
-    const canvas = document.createElement('canvas');
+    // 録画開始
     canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    
-    // 指定された背景色で塗りつぶし
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, w, h);
-
-    const stream = canvas.captureStream(30);
+    const stream = canvas.captureStream(fps);
     const recorder = new MediaRecorder(stream, { mimeType: 'video/mp4' });
     const chunks = [];
 
     return new Promise((resolve) => {
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
-            const videoBlob = new Blob(chunks, { type: 'video/mp4' });
-            resolve({ blob: videoBlob, name: item.name });
+            const blob = new Blob(chunks, { type: 'video/mp4' });
+            resolve({ blob, name: item.name });
         };
 
         recorder.start();
-        ctx.drawImage(img, hasAlpha ? minX : 0, hasAlpha ? minY : 0, w, h, 0, 0, w, h);
-        setTimeout(() => recorder.stop(), 1000); 
-        img.close();
+        let frameIdx = 0;
+        const interval = setInterval(() => {
+            if (frameIdx >= apng.frames.length) {
+                clearInterval(interval);
+                recorder.stop();
+                return;
+            }
+            const frame = apng.frames[frameIdx];
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0,0,w,h);
+            ctx.drawImage(frame.imageElement, frame.left - minX, frame.top - minY);
+            frameIdx++;
+        }, 1000 / fps);
     });
 }
 
 document.getElementById('generateBtn').onclick = async () => {
     const btn = document.getElementById('generateBtn');
     const container = document.getElementById('result-container');
-    const selectedColor = bgColorInput.value;
     btn.disabled = true;
-
+    
     const indices = Array.from(selectedIndices);
     for (let i = 0; i < indices.length; i++) {
-        btn.innerText = `処理中 (${i+1}/${indices.length})...`;
-        const result = await createSingleMp4(indices[i], selectedColor);
-        
+        btn.innerText = `生成中 (${i+1}/${indices.length})...`;
+        const result = await createAnimatedMp4(indices[i]);
         const url = URL.createObjectURL(result.blob);
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'result-item';
-        itemDiv.innerHTML = `
-            <video src="${url}" autoplay loop muted playsinline style="background:${selectedColor}"></video>
-            <div class="result-info">
-                <strong>${result.name}</strong>
-                <small>MP4 / ${selectedColor}</small>
-            </div>
+        const div = document.createElement('div');
+        div.className = 'result-item';
+        div.innerHTML = `
+            <video src="${url}" autoplay loop muted playsinline></video>
+            <div style="flex:1; font-size:12px;"><strong>${result.name}</strong></div>
             <a href="${url}" download="${result.name}.mp4" class="dl-btn">保存</a>
         `;
-        container.appendChild(itemDiv);
+        container.appendChild(div);
     }
     btn.innerText = "完了！";
-    setTimeout(() => { btn.disabled = false; updateBtnText(); }, 2000);
+    btn.disabled = false;
 };
-
-function updateBtnText() {
-    document.getElementById('generateBtn').innerText = `${selectedIndices.size}個のMP4を生成`;
-}
 </script>
 </body>
 </html>
