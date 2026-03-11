@@ -3,43 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TileCraft - Batch Video</title>
+    <title>TileCraft - MP4 Batch</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; margin: 15px 0; max-height: 350px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
-        .item { position: relative; cursor: pointer; }
-        .item img { width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 6px; background: #f8f8f8; border: 2px solid transparent; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 10px; margin: 15px 0; max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
+        .item { cursor: pointer; position: relative; }
+        .item img { width: 100%; aspect-ratio: 1/1; object-fit: contain; border-radius: 6px; background: #eee; border: 2px solid transparent; }
         .item.selected img { border-color: #007aff; background: #eef6ff; }
-        
         .btn { display: block; width: 100%; padding: 16px; background: #007aff; color: white; border: none; border-radius: 12px; font-weight: bold; font-size: 16px; }
         .btn:disabled { background: #cbd5e0; }
-        
-        /* 生成結果のリスト */
-        .result-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        .result-item { background: white; border-radius: 10px; padding: 10px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-        .result-item video { width: 80px; height: 80px; border-radius: 4px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3MhOpHHAaEMDA4MAMJHWBqMIjE9QWgx9fLIpSNYHicByBAAn4SAnY9AnbwAAAABJRU5ErkJggg=='); }
-        .result-info { flex: 1; font-size: 14px; }
-        .dl-link { color: #007aff; text-decoration: none; font-weight: bold; font-size: 14px; border: 1px solid #007aff; padding: 5px 10px; border-radius: 5px; }
+        .result-list { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+        .result-item { background: white; border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        video { width: 70px; height: 70px; border-radius: 6px; background: #000; }
+        .result-info { flex: 1; font-size: 14px; overflow: hidden; }
+        .result-info strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dl-btn { background: #34c759; color: white; text-decoration: none; padding: 8px 15px; border-radius: 8px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3 style="margin-top:0">1. ZIPをアップロード</h3>
+    <h3 style="margin-top:0">1. ZIPを選択</h3>
     <input type="file" id="zipInput" accept=".zip">
 </div>
 
 <div id="selector-card" class="card" style="display:none">
-    <h3 style="margin:0">2. 生成する画像を選択</h3>
+    <h3 style="margin:0">2. 動画にする画像を選択</h3>
     <div class="grid" id="imageGrid"></div>
-    <button id="generateBtn" class="btn" disabled>個別に動画を生成（一括処理）</button>
+    <button id="generateBtn" class="btn" disabled>MP4動画を生成</button>
 </div>
 
-<div id="result-container" class="result-list">
-    </div>
+<div id="result-container" class="result-list"></div>
 
 <script>
 let allImageData = []; 
@@ -58,7 +54,6 @@ document.getElementById('zipInput').onchange = async (e) => {
     grid.innerHTML = '';
     allImageData = [];
     selectedIndices.clear();
-    updateUI();
 
     for (let i = 0; i < files.length; i++) {
         const blob = await zip.files[files[i]].async("blob");
@@ -76,24 +71,19 @@ document.getElementById('zipInput').onchange = async (e) => {
                 selectedIndices.add(i);
                 div.classList.add('selected');
             }
-            updateUI();
+            document.getElementById('generateBtn').disabled = selectedIndices.size === 0;
+            document.getElementById('generateBtn').innerText = `${selectedIndices.size}個のMP4を生成`;
         };
         grid.appendChild(div);
     }
     document.getElementById('selector-card').style.display = 'block';
 };
 
-function updateUI() {
-    document.getElementById('generateBtn').disabled = selectedIndices.size === 0;
-    document.getElementById('generateBtn').innerText = `${selectedIndices.size}個の動画を生成`;
-}
-
-// 1つの画像から透過動画を生成する非同期関数
-async function createSingleVideo(idx) {
+async function createSingleMp4(idx) {
     const item = allImageData[idx];
     const img = await createImageBitmap(item.blob);
     
-    // 単一画像のアルファ境界計算
+    // 余白カット用のバウンディングボックス計算
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = img.width; tempCanvas.height = img.height;
     const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
@@ -101,36 +91,54 @@ async function createSingleVideo(idx) {
     const data = tempCtx.getImageData(0, 0, img.width, img.height).data;
     
     let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+    let hasAlpha = false;
     for (let i = 3; i < data.length; i += 4) {
         if (data[i] > 0) {
             const x = (i / 4) % img.width; const y = Math.floor((i / 4) / img.width);
             minX = Math.min(minX, x); maxX = Math.max(maxX, x);
             minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+            hasAlpha = true;
         }
     }
-    const w = maxX - minX + 1; const h = maxY - minY + 1;
 
-    // 描画用キャンバス
+    // 全く描画がない場合は元のサイズを使用
+    const w = hasAlpha ? (maxX - minX + 1) : img.width;
+    const h = hasAlpha ? (maxY - minY + 1) : img.height;
+    const startX = hasAlpha ? minX : 0;
+    const startY = hasAlpha ? minY : 0;
+
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext('2d');
     
-    const stream = canvas.captureStream(5); // 静止画なので低fpsで十分
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+    // 背景を黒で塗りつぶし（透過なしMP4のため）
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, w, h);
+
+    // iOS SafariでMP4出力を試みる設定
+    const stream = canvas.captureStream(30);
+    let options = { mimeType: 'video/mp4' };
+    
+    // ブラウザがvideo/mp4に対応していない場合のフォールバック（一部の古いiOS用）
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm' }; 
+    }
+
+    const recorder = new MediaRecorder(stream, options);
     const chunks = [];
 
     return new Promise((resolve) => {
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
-            const videoBlob = new Blob(chunks, { type: 'video/webm' });
-            resolve({ blob: videoBlob, name: item.name, width: w, height: h });
+            const videoBlob = new Blob(chunks, { type: options.mimeType });
+            resolve({ blob: videoBlob, name: item.name, ext: options.mimeType.split('/')[1] });
         };
 
         recorder.start();
-        ctx.drawImage(img, minX, minY, w, h, 0, 0, w, h);
+        ctx.drawImage(img, startX, startY, w, h, 0, 0, w, h);
         
-        // 数フレーム分録画（動画として認識させるため）
-        setTimeout(() => recorder.stop(), 500); 
+        // 静止画を動画として成立させるため1秒間描画
+        setTimeout(() => recorder.stop(), 1000); 
         img.close();
     });
 }
@@ -139,12 +147,11 @@ document.getElementById('generateBtn').onclick = async () => {
     const btn = document.getElementById('generateBtn');
     const container = document.getElementById('result-container');
     btn.disabled = true;
-    container.innerHTML = '';
 
     const indices = Array.from(selectedIndices);
     for (let i = 0; i < indices.length; i++) {
-        btn.innerText = `生成中 (${i+1}/${indices.length})...`;
-        const result = await createSingleVideo(indices[i]);
+        btn.innerText = `処理中 (${i+1}/${indices.length})...`;
+        const result = await createSingleMp4(indices[i]);
         
         const url = URL.createObjectURL(result.blob);
         const itemDiv = document.createElement('div');
@@ -152,16 +159,19 @@ document.getElementById('generateBtn').onclick = async () => {
         itemDiv.innerHTML = `
             <video src="${url}" autoplay loop muted playsinline></video>
             <div class="result-info">
-                <strong>${result.name}</strong><br>
-                <small>${result.width}x${result.height}</small>
+                <strong>${result.name}</strong>
+                <small>.${result.ext}</small>
             </div>
-            <a href="${url}" download="${result.name}.webm" class="dl-link">保存</a>
+            <a href="${url}" download="${result.name}.${result.ext}" class="dl-btn">保存</a>
         `;
         container.appendChild(itemDiv);
     }
 
-    btn.innerText = "完了！";
-    setTimeout(() => updateUI(), 2000);
+    btn.innerText = "完了しました";
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerText = `${selectedIndices.size}個のMP4を生成`;
+    }, 2000);
 };
 </script>
 </body>
