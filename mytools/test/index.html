@@ -3,119 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TileCraft Mobile - Alpha Video</title>
-    <script src="coi-serviceworker.js"></script>
+    <title>TileCraft - Mobile Selector</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #f0f2f5; }
-        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        #log { background: #1a202c; color: #48bb78; padding: 10px; border-radius: 8px; font-size: 11px; height: 80px; overflow-y: auto; margin: 15px 0; }
-        .gallery { display: flex; flex-direction: column; gap: 15px; }
-        .v-card { background: white; border-radius: 12px; padding: 10px; border: 1px solid #ddd; }
-        video { width: 100%; border-radius: 8px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3MhOpHHAaEMDA4MAMJHWBqMIjE9QWgx9fLIpSNYHicByBAAn4SAnY9AnbwAAAABJRU5ErkJggg=='); }
-        .btn { display: block; width: 100%; padding: 15px; background: #007aff; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 10px; text-align: center; text-decoration: none; }
+        body { font-family: -apple-system, sans-serif; background: #f4f4f9; padding: 20px; color: #333; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 20px; border: 1px solid #eee; padding: 10px; max-height: 300px; overflow-y: auto; }
+        .grid img { width: 100%; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: #eee; }
+        .grid img.selected { border-color: #007aff; background: #e1f0ff; }
+        .btn { display: block; width: 100%; padding: 15px; background: #007aff; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 15px; text-align: center; }
         .btn:disabled { background: #ccc; }
+        #preview-container { text-align: center; margin-top: 20px; display: none; }
+        video { width: 100%; max-width: 300px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2NkYGAQYcAP3MhOpHHAaEMDA4MAMJHWBqMIjE9QWgx9fLIpSNYHicByBAAn4SAnY9AnbwAAAABJRU5ErkJggg=='); border: 1px solid #ddd; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>📱 透過動画作成 (iOS対応)</h3>
-    <input type="file" id="zipInput" accept=".zip" style="margin-bottom: 10px;">
-    <button id="processBtn" class="btn" disabled>動画を生成する</button>
-    <div id="log">ログ: 準備完了</div>
+    <h3>1. ZIPを選択</h3>
+    <input type="file" id="zipInput" accept=".zip">
+    
+    <div id="fileListContainer" style="display:none;">
+        <h3>2. 使用する画像セットを確認</h3>
+        <p style="font-size:12px; color:666;">※連番画像が自動で動画化されます</p>
+        <div class="grid" id="imageGrid"></div>
+        <button id="generateBtn" class="btn">透過動画を生成する</button>
+    </div>
 </div>
 
-<div id="gallery" class="gallery"></div>
+<div id="preview-container" class="card">
+    <h3>生成結果</h3>
+    <video id="resultVideo" controls loop autoplay muted playsinline></video>
+    <a id="downloadLink" class="btn" style="background:#34c759; text-decoration:none;">動画を保存</a>
+</div>
 
 <script>
-const { createFFmpeg, fetchFile } = FFmpeg;
-const ffmpeg = createFFmpeg({ log: true });
-const gallery = document.getElementById('gallery');
+let imageBlobs = [];
+let commonBox = null;
 
-function addLog(msg) {
-    const log = document.getElementById('log');
-    log.innerHTML += `<div>> ${msg}</div>`;
-    log.scrollTop = log.scrollHeight;
-}
+document.getElementById('zipInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-document.getElementById('zipInput').onchange = () => {
-    document.getElementById('processBtn').disabled = false;
-};
+    const zip = await JSZip.loadAsync(file);
+    const files = Object.keys(zip.files)
+        .filter(name => name.match(/\.(png|apng)$/i))
+        .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
 
-document.getElementById('processBtn').onclick = async () => {
-    const file = document.getElementById('zipInput').files[0];
-    const btn = document.getElementById('processBtn');
-    btn.disabled = true;
-    gallery.innerHTML = '';
+    const grid = document.getElementById('imageGrid');
+    grid.innerHTML = '';
+    imageBlobs = [];
     
-    try {
-        addLog("FFmpeg初期化中...");
-        if (!ffmpeg.isLoaded()) await ffmpeg.load();
+    document.getElementById('fileListContainer').style.display = 'block';
 
-        const zip = await JSZip.loadAsync(file);
-        const files = Object.keys(zip.files).filter(n => n.match(/\.png$/i)).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        
-        // --- 余白計算 (Memory Safe) ---
-        addLog("余白を計算中...");
-        let minX = 9999, minY = 9999, maxX = 0, maxY = 0;
-        
-        for (const name of files) {
-            const img = await createImageBitmap(await zip.files[name].async("blob"));
-            canvas.width = img.width; canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-            const data = ctx.getImageData(0,0,img.width,img.height).data;
-            for(let i=3; i<data.length; i+=4) {
-                if(data[i] > 0) {
-                    const x = (i/4) % img.width; const y = Math.floor((i/4) / img.width);
-                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-                }
-            }
-            img.close(); // iPhoneのメモリ解放に重要
-        }
-        
-        const w = maxX - minX + 1; const h = maxY - minY + 1;
-        addLog(`サイズ確定: ${w}x${h}`);
-
-        // --- フレーム書き出し ---
-        for (let i = 0; i < files.length; i++) {
-            const img = await createImageBitmap(await zip.files[files[i]].async("blob"));
-            canvas.width = w; canvas.height = h;
-            ctx.clearRect(0,0,w,h);
-            ctx.drawImage(img, minX, minY, w, h, 0, 0, w, h);
-            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-            ffmpeg.FS('writeFile', `f${i}.png`, await fetchFile(blob));
-            img.close();
-        }
-
-        // --- iOS用 HEVC (透過) エンコード ---
-        addLog("MP4生成中 (iOS対応形式)...");
-        // iOSで透過させるための重要なフラグ: -pix_fmt yuva420p と -tag:v hvc1
-        await ffmpeg.run('-framerate', '10', '-i', 'f%d.png', '-c:v', 'libx265', '-pix_fmt', 'yuva420p', '-tag:v', 'hvc1', 'out.mp4');
-
-        const data = ffmpeg.FS('readFile', 'out.mp4');
-        const url = URL.createObjectURL(new Blob([data.buffer], {type:'video/mp4'}));
-        
-        gallery.innerHTML = `
-            <div class="v-card">
-                <video src="${url}" controls loop autoplay muted playsinline></video>
-                <a href="${url}" download="result.mp4" class="btn" style="background:#34c759">動画を保存する</a>
-            </div>
-        `;
-        addLog("完了！");
-
-    } catch (e) {
-        addLog("エラー: " + e.message);
-    } finally {
-        btn.disabled = false;
+    for (const name of files) {
+        const blob = await zip.files[name].async("blob");
+        const url = URL.createObjectURL(blob);
+        const img = document.createElement('img');
+        img.src = url;
+        grid.appendChild(img);
+        imageBlobs.push(blob);
     }
 };
-</script>
 
+async function calculateAlphaBox(blobs) {
+    let minX = 9999, minY = 9999, maxX = 0, maxY = 0;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    for (const blob of blobs) {
+        const img = await createImageBitmap(blob);
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        
+        const data = ctx.getImageData(0, 0, img.width, img.height).data;
+        for (let i = 3; i < data.length; i += 4) {
+            if (data[i] > 0) {
+                const x = (i / 4) % img.width;
+                const y = Math.floor((i / 4) / img.width);
+                minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+            }
+        }
+        img.close();
+    }
+    return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+document.getElementById('generateBtn').onclick = async () => {
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true;
+    btn.innerText = "生成中...";
+
+    const box = await calculateAlphaBox(imageBlobs);
+    const canvas = document.createElement('canvas');
+    canvas.width = box.w;
+    canvas.height = box.h;
+    const ctx = canvas.getContext('2d');
+
+    // MediaRecorderアプローチ (iPhoneのSafariで最も安定)
+    const stream = canvas.captureStream(10); // 10fps
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+    const chunks = [];
+
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const video = document.getElementById('resultVideo');
+        video.src = url;
+        document.getElementById('preview-container').style.display = 'block';
+        document.getElementById('downloadLink').href = url;
+        document.getElementById('downloadLink').download = "tilecraft_video.webm";
+        btn.disabled = false;
+        btn.innerText = "透過動画を生成する";
+    };
+
+    recorder.start();
+
+    for (const blob of imageBlobs) {
+        const img = await createImageBitmap(blob);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+        img.close();
+        await new Promise(r => setTimeout(r, 100)); // 10fps間隔
+    }
+
+    recorder.stop();
+};
+</script>
 </body>
 </html>
