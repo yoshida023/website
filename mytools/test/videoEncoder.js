@@ -2,7 +2,7 @@
 import { VideoCore } from './modules/VideoCore.js';
 
 export async function generateStampVideo(params) {
-    const { file, canvas, ctx } = params;
+    const { file, bgColor, canvas, ctx } = params;
 
     const buffer = await file.async("arraybuffer");
     const frames = await VideoCore.getRenderedFrames(buffer);
@@ -20,7 +20,7 @@ export async function generateStampVideo(params) {
     canvas.height = height;
 
     const fps = 30;
-    // 短すぎるとエラーになる場合があるため、最低1秒(30フレーム)を確保
+    // iOSでの安定のため最低1秒を確保
     const totalFrames = Math.max(30, Math.ceil((totalDuration / 1000) * fps));
     
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -31,11 +31,10 @@ export async function generateStampVideo(params) {
         height,
         fps,
         bitrate: 1_500_000,
-        // iOSでは avc1.42E01E (Baseline Profile) が最も安定します
+        // iOSでは Baseline Profile (42E01E) が最もエラーが少ない
         codec: isIOS ? 'avc1.42E01E' : 'avc1.4D401F' 
     };
 
-    // VideoCore.js 内で encoder.configure(config) が呼ばれます
     const { muxer, encoder } = await VideoCore.createEncoder(config, isIOS);
 
     for (let f = 0; f < totalFrames; f++) {
@@ -51,21 +50,26 @@ export async function generateStampVideo(params) {
             }
         }
 
-        // 3. 背景の塗りつぶし (透過のままではiOSでエラーになる場合があるため白で塗りつぶし)
-        ctx.fillStyle = "#FFFFFF"; 
+        // 3. 背景色の適用
+        // 透過部分を指定された色（デフォルト #8DACD6）で塗りつぶします
+        ctx.fillStyle = bgColor || "#8DACD6";
         ctx.fillRect(0, 0, width, height);
+        
+        // スタンプを中心に描画（偶数補正によるズレを防止）
         ctx.drawImage(activeFrame, 0, 0, frames[0].img.width, frames[0].img.height);
 
-        // VideoFrameの作成
+        // 4. VideoFrameの作成（timestampを整数に丸める）
+        const timestamp = Math.round((f * 1000000) / fps);
+        const duration = Math.round(1000000 / fps);
+        
         const vFrame = new VideoFrame(canvas, { 
-            timestamp: Math.floor((f * 1000000) / fps), 
-            duration: Math.floor(1000000 / fps) 
+            timestamp: timestamp, 
+            duration: duration 
         });
 
         try {
             encoder.encode(vFrame);
         } catch (e) {
-            console.error("Encode error:", e);
             vFrame.close();
             throw e;
         }
