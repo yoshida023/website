@@ -10,8 +10,7 @@ export async function generateStampVideo(params) {
 
     const totalDuration = frames.reduce((acc, f) => acc + f.delay, 0);
     
-    // --- 重要：サイズの偶数補正 ---
-    // H.264エンコードは幅・高さが偶数である必要があります
+    // 1. サイズの偶数補正 (iOS/H.264では必須)
     let width = frames[0].img.width;
     let height = frames[0].img.height;
     if (width % 2 !== 0) width += 1;
@@ -21,21 +20,23 @@ export async function generateStampVideo(params) {
     canvas.height = height;
 
     const fps = 30;
+    // 短すぎるとエラーになる場合があるため、最低1秒(30フレーム)を確保
     const totalFrames = Math.max(30, Math.ceil((totalDuration / 1000) * fps));
     
-    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     
-    // コーデック設定（互換性の高い設定を選択）
+    // 2. iOS向けのエンコード設定
     const config = {
         width,
         height,
         fps,
-        bitrate: 2_000_000,
-        // 解像度が特殊な場合を考慮し、PC/モバイル共に柔軟なプロファイルを使用
-        codec: 'avc1.4D401F' 
+        bitrate: 1_500_000,
+        // iOSでは avc1.42E01E (Baseline Profile) が最も安定します
+        codec: isIOS ? 'avc1.42E01E' : 'avc1.4D401F' 
     };
 
-    const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
+    // VideoCore.js 内で encoder.configure(config) が呼ばれます
+    const { muxer, encoder } = await VideoCore.createEncoder(config, isIOS);
 
     for (let f = 0; f < totalFrames; f++) {
         const loopTime = ((f / fps) * 1000) % totalDuration;
@@ -50,20 +51,23 @@ export async function generateStampVideo(params) {
             }
         }
 
-        // 描画処理
-        ctx.fillStyle = "#FFFFFF"; // 透過部分を白背景にする（必要に応じて変更）
+        // 3. 背景の塗りつぶし (透過のままではiOSでエラーになる場合があるため白で塗りつぶし)
+        ctx.fillStyle = "#FFFFFF"; 
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(activeFrame, 0, 0, frames[0].img.width, frames[0].img.height);
 
+        // VideoFrameの作成
         const vFrame = new VideoFrame(canvas, { 
-            timestamp: (f * 1000000) / fps, 
-            duration: 1000000 / fps 
+            timestamp: Math.floor((f * 1000000) / fps), 
+            duration: Math.floor(1000000 / fps) 
         });
 
         try {
             encoder.encode(vFrame);
         } catch (e) {
-            console.error("Encode error at frame", f, e);
+            console.error("Encode error:", e);
+            vFrame.close();
+            throw e;
         }
         vFrame.close();
     }
