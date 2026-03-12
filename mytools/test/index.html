@@ -3,101 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025</title>
+    <title>スタンプ個別選択・動画生成</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
-        .card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
-        .item img { width: 100%; aspect-ratio: 1; border: 2px solid transparent; cursor: pointer; border-radius: 5px; }
-        .item.selected img { border-color: #007aff; }
-        .btn { width: 100%; padding: 15px; background: #007aff; color: white; border: none; border-radius: 8px; font-weight: bold; }
+        body { font-family: sans-serif; background: #f8f9fa; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 600px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        
+        /* スタンプ一覧のグリッド */
+        #stampGrid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); 
+            gap: 10px; 
+            margin: 20px 0; 
+            max-height: 400px; 
+            overflow-y: auto; 
+            border: 1px solid #eee; 
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .stamp-item { 
+            aspect-ratio: 1; 
+            border: 2px solid transparent; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: #f0f0f0;
+            overflow: hidden;
+        }
+        .stamp-item img { max-width: 90%; max-height: 90%; object-fit: contain; }
+        .stamp-item.selected { border-color: #00b900; background: #e6ffe6; }
+
+        button { width: 100%; padding: 15px; background: #00b900; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 10px; font-size: 14px; text-align: center; }
+        #downloadArea { margin-top: 20px; display: none; text-align: center; }
+        video { width: 100%; border-radius: 8px; background: #000; }
+        .save-btn { display: block; margin-top: 10px; padding: 15px; background: #007bff; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h3>1. ZIPを選択</h3>
-    <input type="file" id="zipInput" accept=".zip">
+<div class="container">
+    <h3>スタンプ選択生成</h3>
+    
+    <div class="input-group">
+        <label>タイトル</label>
+        <input type="text" id="titleInput" value="LINEスタンプ発売中！">
+    </div>
+
+    <div class="input-group">
+        <label>スタンプZIPを選択</label>
+        <input type="file" id="zipInput" accept=".zip">
+    </div>
+
+    <div id="stampGrid">
+        </div>
+
+    <button id="generateBtn" disabled>動画を生成 (0個選択中)</button>
+    <div id="status">ZIPをアップロードしてください</div>
+
+    <div id="downloadArea">
+        <video id="resultVideo" controls playsinline></video>
+        <a id="saveLink" class="save-btn">動画を保存する</a>
+    </div>
 </div>
 
-<div id="ui" class="card" style="display:none">
-    <h3>2. 画像を選択</h3>
-    <div style="margin: 10px 0;">背景色: <input type="color" id="bgColor" value="#00FF00"></div>
-    <div class="grid" id="imageGrid"></div>
-    <button id="generateBtn" class="btn" style="margin-top:20px;">MP4を生成</button>
-</div>
-
-<div id="results"></div>
+<canvas id="exportCanvas" style="display:none"></canvas>
 
 <script type="module">
-import parseAPNG from 'https://cdn.skypack.dev/apng-js';
-import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
+    import { generateStampVideo, CONFIG_MOBILE, CONFIG_PC } from './videoEncoder.js';
+    import { VideoCore } from './modules/VideoCore.js';
 
-let allFiles = [];
-let selected = new Set();
+    const zipInput = document.getElementById('zipInput');
+    const stampGrid = document.getElementById('stampGrid');
+    const generateBtn = document.getElementById('generateBtn');
+    const status = document.getElementById('status');
+    const canvas = document.getElementById('exportCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
 
-document.getElementById('zipInput').onchange = async (e) => {
-    const zip = await JSZip.loadAsync(e.target.files[0]);
-    const files = Object.keys(zip.files).filter(n => n.match(/\.(png|apng)$/i)).sort();
-    
-    const grid = document.getElementById('imageGrid');
-    for (let i = 0; i < files.length; i++) {
-        const buffer = await zip.files[files[i]].async("arraybuffer");
-        allFiles.push({ name: files[i], buffer });
-        
-        const div = document.createElement('div');
-        div.className = 'item';
-        div.innerHTML = `<img src="${URL.createObjectURL(new Blob([buffer]))}">`;
-        div.onclick = () => {
-            selected.has(i) ? selected.delete(i) : selected.add(i);
-            div.classList.toggle('selected');
-        };
-        grid.appendChild(div);
+    let selectedFiles = new Set();
+    let allStampFiles = [];
+
+    // ZIP読み込みと一覧表示
+    zipInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        status.innerText = "解析中...";
+        stampGrid.innerHTML = "";
+        selectedFiles.clear();
+        updateBtnState();
+
+        const zip = await JSZip.loadAsync(file);
+        allStampFiles = [];
+
+        const promises = [];
+        zip.forEach((path, zipEntry) => {
+            if (!zipEntry.dir && path.match(/\.(png|apng)$/i) && !path.startsWith('__MACOSX')) {
+                promises.push((async () => {
+                    const buffer = await zipEntry.async("arraybuffer");
+                    const blob = new Blob([buffer], { type: "image/png" });
+                    const url = URL.createObjectURL(blob);
+                    return { name: path, entry: zipEntry, url };
+                })());
+            }
+        });
+
+        allStampFiles = (await Promise.all(promises)).sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+
+        allStampFiles.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'stamp-item';
+            const img = document.createElement('img');
+            img.src = item.url;
+            div.appendChild(img);
+
+            div.onclick = () => {
+                if (selectedFiles.has(item)) {
+                    selectedFiles.delete(item);
+                    div.classList.remove('selected');
+                } else {
+                    selectedFiles.add(item);
+                    div.classList.add('selected');
+                }
+                updateBtnState();
+            };
+            stampGrid.appendChild(div);
+        });
+
+        status.innerText = `${allStampFiles.length}個のスタンプが見つかりました`;
+        generateBtn.disabled = false;
+    };
+
+    function updateBtnState() {
+        generateBtn.innerText = `動画を生成 (${selectedFiles.size}個選択中)`;
+        generateBtn.disabled = selectedFiles.size === 0;
     }
-    document.getElementById('ui').style.display = 'block';
-};
 
-async function encode(idx) {
-    const { name, buffer } = allFiles[idx];
-    const apng = parseAPNG(buffer);
-    await apng.createImages();
-    
-    const w = apng.width, h = apng.height;
-    const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width: w, height: h } });
-    const encoder = new VideoEncoder({
-        output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-        error: console.error
-    });
-    encoder.configure({ codec: 'avc1.42E01E', width: w, height: h, bitrate: 1e6, framerate: 10 });
+    generateBtn.onclick = async () => {
+        try {
+            generateBtn.disabled = true;
+            status.innerText = "動画生成中...";
+            
+            const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+            const config = isMobile ? CONFIG_MOBILE : CONFIG_PC;
+            canvas.width = config.width;
+            canvas.height = config.height;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    
-    let time = 0;
-    for (const frame of apng.frames) {
-        ctx.fillStyle = document.getElementById('bgColor').value;
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(frame.imageElement, frame.left, frame.top);
-        const vf = new VideoFrame(canvas, { timestamp: time });
-        encoder.encode(vf);
-        vf.close();
-        time += (frame.delay || 100) * 1000;
-    }
-    await encoder.flush();
-    muxer.finalize();
-    return new Blob([muxer.target.buffer], { type: 'video/mp4' });
-}
+            // 選択されたファイルのみを抽出（元の順序を維持）
+            const filesToProcess = allStampFiles.filter(f => selectedFiles.has(f)).map(f => f.entry);
 
-document.getElementById('generateBtn').onclick = async () => {
-    for (const idx of selected) {
-        const blob = await encode(idx);
-        const url = URL.createObjectURL(blob);
-        const res = document.getElementById('results');
-        res.innerHTML += `<div>${allFiles[idx].name} <a href="${url}" download="${allFiles[idx].name}.mp4">保存</a></div>`;
-    }
-};
+            const blob = await generateStampVideo({
+                stampFiles: filesToProcess,
+                title: document.getElementById('titleInput').value,
+                bgColor: "#ffffff",
+                stampBgColor: "#f4f4f4",
+                textColor: "#000000",
+                canvas, ctx
+            }, (cur, tot) => {
+                status.innerText = `生成中: ${cur} / ${tot}`;
+            });
+
+            const url = URL.createObjectURL(blob);
+            document.getElementById('resultVideo').src = url;
+            document.getElementById('saveLink').href = url;
+            document.getElementById('saveLink').download = `stamp_video_${Date.now()}.mp4`;
+            document.getElementById('downloadArea').style.display = "block";
+            status.innerText = "完了！";
+        } catch (err) {
+            console.error(err);
+            status.innerText = "エラーが発生しました";
+        } finally {
+            generateBtn.disabled = false;
+        }
+    };
 </script>
 </body>
 </html>
