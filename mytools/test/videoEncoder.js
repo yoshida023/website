@@ -4,31 +4,35 @@ import { VideoCore } from './modules/VideoCore.js';
 export async function generateStampVideo(params) {
     const { file, canvas, ctx } = params;
 
-    // APNGのデコード
     const buffer = await file.async("arraybuffer");
     const frames = await VideoCore.getRenderedFrames(buffer);
-    if (!frames || frames.length === 0) throw new Error("解析失敗");
+    if (!frames || frames.length === 0) throw new Error("APNGの解析に失敗しました。");
 
     const totalDuration = frames.reduce((acc, f) => acc + f.delay, 0);
-    const width = frames[0].img.width;
-    const height = frames[0].img.height;
+    
+    // --- 重要：サイズの偶数補正 ---
+    // H.264エンコードは幅・高さが偶数である必要があります
+    let width = frames[0].img.width;
+    let height = frames[0].img.height;
+    if (width % 2 !== 0) width += 1;
+    if (height % 2 !== 0) height += 1;
 
-    // 動画サイズをスタンプに合わせる
     canvas.width = width;
     canvas.height = height;
 
-    // エンコード設定
     const fps = 30;
     const totalFrames = Math.max(30, Math.ceil((totalDuration / 1000) * fps));
     
-    // デバイスに応じたコーデック選択（互換性重視）
     const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    
+    // コーデック設定（互換性の高い設定を選択）
     const config = {
         width,
         height,
         fps,
         bitrate: 2_000_000,
-        codec: isMobile ? 'avc1.42E01E' : 'avc1.4D401F'
+        // 解像度が特殊な場合を考慮し、PC/モバイル共に柔軟なプロファイルを使用
+        codec: 'avc1.4D401F' 
     };
 
     const { muxer, encoder } = await VideoCore.createEncoder(config, isMobile);
@@ -36,7 +40,6 @@ export async function generateStampVideo(params) {
     for (let f = 0; f < totalFrames; f++) {
         const loopTime = ((f / fps) * 1000) % totalDuration;
         
-        // 現在の時刻に最適なフレームを選択
         let acc = 0;
         let activeFrame = frames[frames.length - 1].img;
         for (const frame of frames) {
@@ -47,15 +50,21 @@ export async function generateStampVideo(params) {
             }
         }
 
-        // 描画（余計な背景やテキストは一切なし）
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(activeFrame, 0, 0, width, height);
+        // 描画処理
+        ctx.fillStyle = "#FFFFFF"; // 透過部分を白背景にする（必要に応じて変更）
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(activeFrame, 0, 0, frames[0].img.width, frames[0].img.height);
 
         const vFrame = new VideoFrame(canvas, { 
             timestamp: (f * 1000000) / fps, 
             duration: 1000000 / fps 
         });
-        encoder.encode(vFrame);
+
+        try {
+            encoder.encode(vFrame);
+        } catch (e) {
+            console.error("Encode error at frame", f, e);
+        }
         vFrame.close();
     }
 
