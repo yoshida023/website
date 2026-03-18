@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>preBuild for hp2025</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary: #00b900;
+            --accent: #007aff;
+            --multi: #6f42c1;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body { 
+            font-family: -apple-system, sans-serif; 
+            background: var(--bg-color); 
+            margin: 0; 
+            padding: 10px; 
+            padding-bottom: 150px;
+        }
+
+        h1 { font-size: 1rem; text-align: center; margin: 5px 0; color: #333; }
+        h3 { font-size: 0.5rem; text-align: center; margin: 5px 0; color: #333; }
+
+        .action-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn-multi {
+            background: var(--multi);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            border: none;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* リサイズ設定スイッチ */
+        .resize-control {
+            background: #fff;
+            padding: 10px 15px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .header-container .item-card { width: 45%; }
+
+        .stamp-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            width: 100%;
+        }
+
+        .item-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 2px solid transparent;
+            position: relative;
+        }
+        
+        .item-card.has-image { border-color: var(--accent); }
+
+        .drag-handle { 
+            display: block; 
+            font-size: 11px; 
+            font-weight: bold; 
+            color: #fff;
+            background: #999;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            padding: 2px 0;
+            cursor: grab;
+        }
+        .has-image .drag-handle { background: var(--accent); }
+
+        .preview-container {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: #fff;
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), 
+                              linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee);
+            background-size: 10px 10px;
+            background-position: 0 0, 5px 5px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 6px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+        }
+
+        img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        .controls { display: flex; gap: 4px; }
+        button.small-btn {
+            border: none;
+            border-radius: 4px;
+            padding: 8px 0;
+            font-size: 10px;
+            flex: 1;
+            font-weight: bold;
+        }
+        .btn-upload { background: #e3f2fd; color: var(--accent); }
+        .btn-delete { background: #fee; color: #e57373; }
+
+        .footer-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+            display: flex;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .btn-zip {
+            background: var(--primary);
+            color: white;
+            padding: 14px 0;
+            font-size: 16px;
+            border-radius: 10px;
+            width: 90%;
+            border: none;
+            font-weight: bold;
+        }
+
+        .sortable-swap-highlight {
+            background-color: rgba(0, 122, 255, 0.1) !important;
+            border: 2px dashed var(--accent) !important;
+        }
+    </style>
+</head>
+<body>
+
+<h1>配置エディタ v1.02</h1>
+<h3>© 2026 Yoshida Studio</h3>
+
+<div class="action-panel">
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード</button>
+    <div class="resize-control">
+        <label><input type="checkbox" id="resize-toggle" checked> 幅のリサイズを有効にする</label>
+    </div>
+</div>
+
+<div class="header-container">
+    <div class="item-card" id="card-main">
+        <span class="label" style="font-size:10px; color:#666; font-weight:bold;">main</span>
+        <div class="preview-container"></div>
+        <div class="controls">
+            <button class="small-btn btn-upload" onclick="triggerSingleUpload('main')">UP</button>
+            <button class="small-btn btn-delete" onclick="deleteImage('card-main')">×</button>
+        </div>
+    </div>
+    <div class="item-card" id="card-tab">
+        <span class="label" style="font-size:10px; color:#666; font-weight:bold;">tab</span>
+        <div class="preview-container"></div>
+        <div class="controls">
+            <button class="small-btn btn-upload" onclick="triggerSingleUpload('tab')">UP</button>
+            <button class="small-btn btn-delete" onclick="deleteImage('card-tab')">×</button>
+        </div>
+    </div>
+</div>
+
+<div id="sortable-grid" class="stamp-grid"></div>
+
+<div class="footer-bar">
+    <button class="btn-zip" onclick="generateZip()">ZIPを生成して保存</button>
+</div>
+
+<input type="file" id="file-input-single" accept="image/png,image/jpeg" style="display:none">
+<input type="file" id="file-input-multi" accept="image/png,image/jpeg" multiple style="display:none">
+
+<script>
+    const grid = document.getElementById('sortable-grid');
+    const singleInput = document.getElementById('file-input-single');
+    const multiInput = document.getElementById('file-input-multi');
+    const resizeToggle = document.getElementById('resize-toggle');
+    let currentSingleTargetId = null;
+
+    for (let i = 1; i <= 40; i++) {
+        const id = String(i).padStart(2, '0');
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.id = `card-${id}`;
+        card.innerHTML = `
+            <span class="drag-handle">${id}</span>
+            <div class="preview-container"></div>
+            <div class="controls">
+                <button class="small-btn btn-upload" onclick="triggerSingleUpload('${id}')">UP</button>
+                <button class="small-btn btn-delete" onclick="deleteImage('card-${id}')">×</button>
+            </div>
+        `;
+        grid.appendChild(card);
+    }
+
+    new Sortable(grid, {
+        swap: true,
+        swapClass: 'sortable-swap-highlight',
+        handle: '.drag-handle',
+        animation: 150,
+        onEnd: () => reLabelCards()
+    });
+
+    function reLabelCards() {
+        grid.querySelectorAll('.item-card').forEach((card, index) => {
+            card.querySelector('.drag-handle').innerText = String(index + 1).padStart(2, '0');
+        });
+    }
+
+    function triggerSingleUpload(id) {
+        currentSingleTargetId = id;
+        singleInput.click();
+    }
+
+    singleInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) renderToCard(file, `card-${currentSingleTargetId}`);
+        e.target.value = "";
+    };
+
+    function triggerMultiUpload() {
+        multiInput.click();
+    }
+
+    multiInput.onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        const stampCards = Array.from(grid.querySelectorAll('.item-card'));
+        const leftoverFiles = [];
+
+        for (const file of files) {
+            const fileName = file.name.toLowerCase();
+            const baseName = fileName.split('.')[0];
+
+            if (fileName.includes('main')) {
+                await renderToCard(file, 'card-main');
+            } else if (fileName.includes('tab')) {
+                await renderToCard(file, 'card-tab');
+            } else {
+                const numMatch = baseName.match(/^\d+/);
+                if (numMatch) {
+                    const num = numMatch[0].padStart(2, '0');
+                    const targetCard = document.getElementById(`card-${num}`);
+                    if (targetCard) {
+                        await renderToCard(file, targetCard.id);
+                    } else {
+                        leftoverFiles.push(file);
+                    }
+                } else {
+                    leftoverFiles.push(file);
+                }
+            }
+        }
+
+        let cardIdx = 0;
+        for (const file of leftoverFiles) {
+            while (cardIdx < stampCards.length) {
+                const card = stampCards[cardIdx];
+                if (!card.classList.contains('has-image')) {
+                    await renderToCard(file, card.id);
+                    cardIdx++;
+                    break;
+                }
+                cardIdx++;
+            }
+        }
+        e.target.value = "";
+    };
+
+    function renderToCard(file, cardId) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const card = document.getElementById(cardId);
+                if(card) {
+                    card.querySelector('.preview-container').innerHTML = `<img src="${e.target.result}">`;
+                    card.classList.add('has-image');
+                }
+                resolve();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function deleteImage(cardId) {
+        const card = document.getElementById(cardId);
+        card.querySelector('.preview-container').innerHTML = "";
+        card.classList.remove('has-image');
+    }
+
+    async function generateZip() {
+        const zip = new JSZip();
+        const isResizeEnabled = resizeToggle.checked;
+
+        await addToZip(zip, 'card-main', 240, 'main.png', isResizeEnabled);
+        await addToZip(zip, 'card-tab', 96, 'tab.png', isResizeEnabled);
+        
+        const cards = grid.querySelectorAll('.item-card');
+        for (const card of cards) {
+            const label = card.querySelector('.drag-handle').innerText;
+            await addToZip(zip, card.id, 370, `${label}.png`, isResizeEnabled);
+        }
+
+        if (Object.keys(zip.files).length === 0) return alert("画像がありません");
+
+        const content = await zip.generateAsync({type: "blob"});
+        const now = new Date();
+        const timestamp = now.getFullYear() + 
+            String(now.getMonth() + 1).padStart(2, '0') + 
+            String(now.getDate()).padStart(2, '0') + "_" + 
+            String(now.getHours()).padStart(2, '0') + 
+            String(now.getMinutes()).padStart(2, '0');
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `line_stamps_${timestamp}.zip`;
+        link.click();
+    }
+
+    async function addToZip(zip, elementId, targetW, fileName, isResizeEnabled) {
+        const img = document.getElementById(elementId)?.querySelector('img');
+        if (!img) return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let finalW, finalH;
+
+        if (isResizeEnabled) {
+            // 幅を指定サイズにリサイズし、高さは比率を維持して計算
+            const ratio = img.naturalHeight / img.naturalWidth;
+            finalW = targetW;
+            finalH = Math.round(targetW * ratio);
+        } else {
+            // リサイズOFFの場合は元の画像サイズのまま
+            finalW = img.naturalWidth;
+            finalH = img.naturalHeight;
+        }
+
+        canvas.width = finalW;
+        canvas.height = finalH;
+        ctx.drawImage(img, 0, 0, finalW, finalH);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        zip.file(fileName, blob);
+    }
+</script>
+
+</body>
+</html>
