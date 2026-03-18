@@ -19,28 +19,45 @@ export async function generateStampVideo(params, onProgress) {
         return numA - numB;
     });
 
-    // --- 画像解析処理（通常のPNG対応） ---
-    const stampData = await Promise.all(sortedFiles.map(async (file) => {
-        const buffer = await file.async("arraybuffer");
-        let frames = await VideoCore.getRenderedFrames(buffer);
-        
-        // APNG解析に失敗、またはフレームがない場合は通常の画像として読み込む
-        if (!frames || frames.length === 0) {
-            const blob = new Blob([buffer], { type: 'image/png' });
-            const img = await new Promise((resolve) => {
-                const i = new Image();
-                i.onload = () => resolve(i);
-                i.src = URL.createObjectURL(blob);
-            });
-            // 静止画を「遅延1秒の1フレーム」として定義
-            frames = [{ img: img, delay: 1000 }];
+    // --- 画像解析処理（エラー対策強化版） ---
+    const stampData = [];
+    for (const file of sortedFiles) {
+        try {
+            const buffer = await file.async("arraybuffer");
+            let frames = await VideoCore.getRenderedFrames(buffer);
+            
+            // APNGでない、またはフレーム取得失敗時のフォールバック
+            if (!frames || frames.length === 0) {
+                const blob = new Blob([buffer], { type: 'image/png' });
+                const img = await new Promise((resolve, reject) => {
+                    const i = new Image();
+                    i.onload = () => resolve(i);
+                    i.onerror = () => reject(new Error("Image Load Failed"));
+                    i.src = URL.createObjectURL(blob);
+                });
+                frames = [{ img: img, delay: 1000 }];
+            }
+
+            if (frames && frames.length > 0 && frames[0].img) {
+                const totalDuration = frames.reduce((acc, f) => acc + (f.delay || 100), 0);
+                stampData.push({ 
+                    frames, 
+                    totalDuration, 
+                    img: frames[0].img,
+                    width: frames[0].img.width,
+                    height: frames[0].img.height
+                });
+            }
+        } catch (e) {
+            console.warn(`Skip file ${file.name} due to error:`, e);
+            continue; // エラーが起きたファイルはスキップして継続
         }
+    }
 
-        const totalDuration = frames.reduce((acc, f) => acc + f.delay, 0);
-        return { frames, totalDuration, img: frames[0].img };
-    }));
+    if (stampData.length === 0) throw new Error("有効な画像ファイルが見つかりませんでした。");
 
-    const isEmoji = stampData.length > 0 && stampData[0].img?.width === 180;
+    // 最初の有効な画像の幅で絵文字判定
+    const isEmoji = stampData[0].width === 180;
     const cols = isEmoji ? 7 : 4;
     
     const headerHeight = 100;
@@ -72,42 +89,46 @@ export async function generateStampVideo(params, onProgress) {
         ctx.clip();
 
         for (let i = 0; i < stampData.length; i++) {
-            const { frames, totalDuration, img } = stampData[i];
+            const item = stampData[i];
             const row = Math.floor(i / cols);
             const col = i % cols;
             
             const cellX = edgeMargin + (col * cellWidth);
             const cellY = edgeMargin + headerHeight + (row * cellHeight) - offsetY;
 
-            if (cellY > edgeMargin + headerHeight - cellHeight && cellY < config.height) {
-                const ratio = Math.min((cellWidth - padding * 2) / img.width, (cellHeight - padding * 2) / img.height);
-                const drawW = img.width * ratio;
-                const drawH = img.height * ratio;
-                const drawX = cellX + (cellWidth - drawW) / 2;
-                const drawY = cellY + (cellHeight - drawH) / 2;
+            // 描画範囲外なら計算をスキップ
+            if (cellY < edgeMargin + headerHeight - cellHeight || cellY > config.height) continue;
 
-                const loopTime = ((f / config.fps) * 1000) % totalDuration;
-                let acc = 0;
-                let activeFrame = frames[0].img;
-                for (const frame of frames) {
-                    acc += frame.delay;
-                    if (loopTime < acc) { activeFrame = frame.img; break; }
-                }
+            const ratio = Math.min((cellWidth - padding * 2) / item.width, (cellHeight - padding * 2) / item.height);
+            const drawW = item.width * ratio;
+            const drawH = item.height * ratio;
+            const drawX = cellX + (cellWidth - drawW) / 2;
+            const drawY = cellY + (cellHeight - drawH) / 2;
 
-                ctx.save();
-                ctx.beginPath();
-                ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 8);
-                ctx.fillStyle = stampBgColor;
-                ctx.fill();
-                ctx.strokeStyle = "rgba(0,0,0,0.08)";
-                ctx.stroke();
-                ctx.clip();
-                ctx.drawImage(activeFrame, drawX, drawY, drawW, drawH);
-                ctx.restore();
+            const loopTime = ((f / config.fps) * 1000) % item.totalDuration;
+            let acc = 0;
+            let activeFrame = item.frames[0].img;
+            for (const frame of item.frames) {
+                acc += frame.delay;
+                if (loopTime < acc) { activeFrame = frame.img; break; }
             }
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(cellX + padding, cellY + padding, cellWidth - (padding*2), cellHeight - (padding*2), 8);
+            ctx.fillStyle = stampBgColor;
+            ctx.fill();
+            ctx.strokeStyle = "rgba(0,0,0,0.08)";
+            ctx.stroke();
+            ctx.clip();
+            if (activeFrame) {
+                ctx.drawImage(activeFrame, drawX, drawY, drawW, drawH);
+            }
+            ctx.restore();
         }
         ctx.restore();
 
+        // ヘッダー（タイトル）
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, edgeMargin + headerHeight);
         ctx.fillStyle = textColor;
