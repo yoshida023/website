@@ -9,8 +9,7 @@ export async function generateStampVideo(params, onProgress) {
     const config = isMobile ? CONFIG_MOBILE : CONFIG_PC;
     const { stampFiles, title, bgColor, stampBgColor, textColor, canvas, ctx } = params;
 
-    // --- 余白（マージン）の設定 ---
-    const edgeMargin = 30; // 画面端からの余白
+    const edgeMargin = 30;
     const innerWidth = config.width - (edgeMargin * 2);
     const innerHeight = config.height - (edgeMargin * 2);
 
@@ -20,28 +19,38 @@ export async function generateStampVideo(params, onProgress) {
         return numA - numB;
     });
 
+    // --- 画像解析処理（通常のPNG対応） ---
     const stampData = await Promise.all(sortedFiles.map(async (file) => {
         const buffer = await file.async("arraybuffer");
-        const frames = await VideoCore.getRenderedFrames(buffer);
-        const totalDuration = frames ? frames.reduce((acc, f) => acc + f.delay, 0) : 1000;
-        const img = frames ? frames[0].img : null;
-        return { frames, totalDuration, img };
+        let frames = await VideoCore.getRenderedFrames(buffer);
+        
+        // APNG解析に失敗、またはフレームがない場合は通常の画像として読み込む
+        if (!frames || frames.length === 0) {
+            const blob = new Blob([buffer], { type: 'image/png' });
+            const img = await new Promise((resolve) => {
+                const i = new Image();
+                i.onload = () => resolve(i);
+                i.src = URL.createObjectURL(blob);
+            });
+            // 静止画を「遅延1秒の1フレーム」として定義
+            frames = [{ img: img, delay: 1000 }];
+        }
+
+        const totalDuration = frames.reduce((acc, f) => acc + f.delay, 0);
+        return { frames, totalDuration, img: frames[0].img };
     }));
 
     const isEmoji = stampData.length > 0 && stampData[0].img?.width === 180;
     const cols = isEmoji ? 7 : 4;
     
-    // レイアウト計算（ヘッダーとスタンプ領域）
-    const headerHeight = 100; // スリム化したヘッダー
+    const headerHeight = 100;
     const availableHeightForStamps = innerHeight - headerHeight;
-    
     const cellWidth = innerWidth / cols;
-    const cellHeight = availableHeightForStamps / 6; // 6行が収まる高さ
-    const padding = 6; // スタンプ間の隙間
+    const cellHeight = availableHeightForStamps / 6;
+    const padding = 6;
 
     const totalRows = Math.ceil(stampData.length / cols);
     const shouldScroll = totalRows > 6;
-    
     const scrollDuration = 5; 
     const totalFrames = shouldScroll ? (scrollDuration * config.fps) : 90;
     const scrollLimit = Math.max(0, (totalRows * cellHeight) - availableHeightForStamps);
@@ -54,11 +63,9 @@ export async function generateStampVideo(params, onProgress) {
         const progress = shouldScroll ? (f / totalFrames) : 0;
         const offsetY = progress * scrollLimit;
 
-        // 全体背景の塗りつぶし
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, config.height);
 
-        // スタンプ描画領域のクリッピング（ヘッダーと余白を守る）
         ctx.save();
         ctx.beginPath();
         ctx.rect(edgeMargin, edgeMargin + headerHeight, innerWidth, availableHeightForStamps);
@@ -69,14 +76,11 @@ export async function generateStampVideo(params, onProgress) {
             const row = Math.floor(i / cols);
             const col = i % cols;
             
-            // X/Y座標に edgeMargin を加算して内側に寄せる
             const cellX = edgeMargin + (col * cellWidth);
             const cellY = edgeMargin + headerHeight + (row * cellHeight) - offsetY;
 
             if (cellY > edgeMargin + headerHeight - cellHeight && cellY < config.height) {
-                const availableW = cellWidth - (padding * 2);
-                const availableH = cellHeight - (padding * 2);
-                const ratio = Math.min(availableW / img.width, availableH / img.height);
+                const ratio = Math.min((cellWidth - padding * 2) / img.width, (cellHeight - padding * 2) / img.height);
                 const drawW = img.width * ratio;
                 const drawH = img.height * ratio;
                 const drawX = cellX + (cellWidth - drawW) / 2;
@@ -84,7 +88,7 @@ export async function generateStampVideo(params, onProgress) {
 
                 const loopTime = ((f / config.fps) * 1000) % totalDuration;
                 let acc = 0;
-                let activeFrame = frames[frames.length - 1].img;
+                let activeFrame = frames[0].img;
                 for (const frame of frames) {
                     acc += frame.delay;
                     if (loopTime < acc) { activeFrame = frame.img; break; }
@@ -102,15 +106,13 @@ export async function generateStampVideo(params, onProgress) {
                 ctx.restore();
             }
         }
-        ctx.restore(); // クリッピング解除
+        ctx.restore();
 
-        // ヘッダー（タイトル）の描画（余白を考慮）
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, config.width, edgeMargin + headerHeight);
         ctx.fillStyle = textColor;
         ctx.font = "bold 28px sans-serif";
         ctx.textAlign = "center";
-        // ヘッダー内の中央に配置
         ctx.fillText(title, config.width / 2, edgeMargin + (headerHeight / 2) + 10);
 
         const vFrame = new VideoFrame(canvas, { 
