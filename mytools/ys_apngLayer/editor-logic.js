@@ -13,31 +13,19 @@ async function loadApngToLane(laneIdx, input) {
     try {
         const buffer = await file.arrayBuffer();
         const img = UPNG.decode(buffer);
-        const rgbaFrames = UPNG.toRGBA8(img); // 元ファイルの全フレーム
+        const rgbaFrames = UPNG.toRGBA8(img);
         const conf = CONFIG_MODES[project.profile];
 
-        // いったんそのレーンの全20フレームをクリア（空にする）
         project.lanes[laneIdx].buffers.fill(null);
-
-        // 元ファイルにある枚数分だけを展開（最大20枚まで）
         const count = Math.min(rgbaFrames.length, 20);
         for (let i = 0; i < count; i++) {
-            project.lanes[laneIdx].buffers[i] = await resizeBuffer(
-                new Uint8ClampedArray(rgbaFrames[i]), 
-                img.width, img.height, 
-                conf.w, conf.h
-            );
+            project.lanes[laneIdx].buffers[i] = await resizeBuffer(new Uint8ClampedArray(rgbaFrames[i]), img.width, img.height, conf.w, conf.h);
         }
-
         renderFrameList();
         updatePreview(0);
-    } catch (e) { 
-        alert("解析失敗: " + e.message); 
-    }
-    input.value = ""; // 同じファイルを再度選べるようにリセット
+    } catch (e) { alert("失敗: " + e.message); }
+    input.value = "";
 }
-
-// --- 以下、描画・UI生成ロジック ---
 
 function renderFrameList() {
     const container = document.getElementById('frame-list-container');
@@ -58,27 +46,23 @@ function renderFrameList() {
                     <div class="btn-group">
                         <button class="btn-move" onclick="moveFrameInLane(${laneId}, ${i}, -1)">▲</button>
                         <button class="btn-move" onclick="moveFrameInLane(${laneId}, ${i}, 1)">▼</button>
+                        <button class="btn-clear" onclick="clearFrame(${laneId}, ${i})">CLEAR</button>
                     </div>
                 </div>`;
         });
 
-        html += `
-            <div class="thumb-unit">
-                <div class="result-preview transparent-bg">
-                    <img src="${getCompositeDataURL(i)}" class="thumb-img">
-                </div>
-                <div style="font-size:9px; color:var(--primary); margin-top:5px; font-weight:bold;">RESULT</div>
-            </div></div>`;
+        html += `<div class="thumb-unit"><div class="result-preview transparent-bg"><img src="${getCompositeDataURL(i)}" class="thumb-img"></div></div></div>`;
         card.innerHTML = html;
         container.appendChild(card);
     }
 }
 
+// (getCompositeDataURL, updatePreview, togglePlayback, exportFinalAPNG, resizeBuffer, bufferToDataURL は前回と同じ)
+
 function getCompositeDataURL(idx) {
     const conf = CONFIG_MODES[project.profile];
     offCanvas.width = conf.w; offCanvas.height = conf.h;
     offCtx.clearRect(0, 0, conf.w, conf.h);
-    // レイヤー順に重ねる
     project.renderOrders[idx].forEach(laneId => {
         const buf = project.lanes[laneId].buffers[idx];
         if (buf) {
@@ -91,13 +75,10 @@ function getCompositeDataURL(idx) {
 }
 
 function updatePreview(idx) {
-    currentFrame = idx;
-    const canvas = document.getElementById('main-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = document.getElementById('main-canvas').getContext('2d');
     const img = new Image();
     img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         ctx.drawImage(img, 0, 0);
         document.getElementById('frame-counter').innerText = `FRAME: ${idx + 1} / 20`;
     };
@@ -107,28 +88,20 @@ function updatePreview(idx) {
 function togglePlayback() {
     isPlaying = !isPlaying;
     if (isPlaying) {
-        playTimer = setInterval(() => { 
-            currentFrame = (currentFrame + 1) % 20; 
-            updatePreview(currentFrame); 
-        }, project.delay);
+        playTimer = setInterval(() => { currentFrame = (currentFrame + 1) % 20; updatePreview(currentFrame); }, project.delay);
     } else { clearInterval(playTimer); }
 }
 
 async function exportFinalAPNG() {
     const conf = CONFIG_MODES[project.profile];
     const frames = [];
-    const delays = [];
     for (let i = 0; i < 20; i++) {
         const c = document.createElement('canvas'); c.width = conf.w; c.height = conf.h;
         const img = new Image();
-        await new Promise(r => { 
-            img.onload = () => { c.getContext('2d').drawImage(img, 0, 0); r(); }; 
-            img.src = getCompositeDataURL(i); 
-        });
+        await new Promise(r => { img.onload = () => { c.getContext('2d').drawImage(img, 0, 0); r(); }; img.src = getCompositeDataURL(i); });
         frames.push(c.getContext('2d').getImageData(0,0,conf.w,conf.h).data.buffer);
-        delays.push(project.delay);
     }
-    const apng = UPNG.encode(frames, conf.w, conf.h, 256, delays);
+    const apng = UPNG.encode(frames, conf.w, conf.h, 256, new Array(20).fill(project.delay));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([apng])); a.download = "composite.png"; a.click();
 }
 
