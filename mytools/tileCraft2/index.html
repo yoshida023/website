@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TileCraft - preBuild for hp2025</title>
+    <style>
+        :root { --accent: #2dd4bf; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --blue: #3b82f6; --orange: #fb923c; }
+        body { 
+            font-family: 'Inter', -apple-system, sans-serif; background-color: var(--bg); color: var(--text); 
+            display: flex; flex-direction: column; align-items: center; padding: 20px 15px; margin: 0; 
+            touch-action: manipulation;
+        }
+        /* モード選択モーダル */
+        #modeOverlay {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.95); z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(8px);
+        }
+        .mode-card {
+            background: var(--card); border: 1px solid #334155; padding: 30px; border-radius: 24px;
+            text-align: center; width: 85%; max-width: 350px; margin-bottom: 20px; cursor: pointer; transition: 0.3s;
+        }
+        .mode-card:hover { border-color: var(--accent); transform: translateY(-5px); }
+        .mode-card h2 { margin: 0; color: var(--accent); }
+        .mode-card p { font-size: 0.8rem; color: #94a3b8; }
+
+        .header { text-align: center; margin-bottom: 20px; width: 100%; }
+        .header h1 { margin: 0; font-size: 2.2rem; font-weight: 800; background: linear-gradient(to right, var(--accent), var(--blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; vertical-align: middle; margin-left: 5px; color: white; }
+        
+        .card { background: var(--card); width: 100%; max-width: 400px; border-radius: 20px; border: 1px solid #334155; padding: 20px; margin-bottom: 20px; box-sizing: border-box; }
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 600; color: #e2e8f0; font-size: 0.9rem; }
+        
+        input[type="file"] { font-size: 0.8rem; color: #94a3b8; width: 100%; padding: 10px; background: #0f172a; border-radius: 8px; border: 1px solid #334155; box-sizing: border-box; }
+        
+        .btn { 
+            background-color: var(--accent); color: #0f172a; border: none; width: 100%; height: 55px; 
+            border-radius: 14px; font-weight: 700; cursor: pointer; transition: 0.2s; font-size: 1rem; margin-top: 10px; 
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { background-color: #334155; color: #64748b; cursor: not-allowed; }
+        .btn-save-all { background-color: var(--blue); color: white; display: none; }
+        
+        .grid-container { 
+            display: grid; gap: 8px; margin-top: 20px; width: 100%; display: none;
+        }
+        /* グリッド列数はJSで動的に変更 */
+        .tile-wrapper { 
+            position: relative; border-radius: 6px; overflow: hidden; border: 1px solid #334155;
+            background-image: conic-gradient(#1e293b 0.25turn, #263345 0.25turn 0.5turn, #1e293b 0.5turn 0.75turn, #263345 0.75turn);
+            background-size: 10px 10px; aspect-ratio: attr(data-aspect);
+        }
+        .tile-wrapper img { width: 100%; height: 100%; display: block; object-fit: contain; }
+        .tile-wrapper::after {
+            content: "DL"; position: absolute; bottom: 0; width: 100%; background: rgba(45, 212, 191, 0.8);
+            color: #0f172a; font-size: 0.5rem; font-weight: 800; text-align: center; padding: 1px 0; pointer-events: none;
+        }
+
+        .status-msg { font-size: 0.7rem; color: var(--accent); margin-top: 10px; text-align: center; min-height: 1.2em; }
+        canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="modeOverlay">
+    <h1 style="color:white; margin-bottom:30px;">Select Mode</h1>
+    <div class="mode-card" onclick="initApp('emoji')">
+        <h2>LINE Emoji</h2>
+        <p>180x180px | 3x3 Grid (9 tiles)</p>
+    </div>
+    <div class="mode-card" onclick="initApp('stamp')" style="border-color:var(--orange)">
+        <h2 style="color:var(--orange)">LINE Stamp</h2>
+        <p>370x320px | 4x10 Grid (40 tiles)</p>
+    </div>
+</div>
+
+<div class="header">
+    <h1>TileCraft <span id="modeBadge" class="badge"></span></h1>
+    <p id="subTitle"></p>
+</div>
+
+<div class="card">
+    <div class="section-header"><span>🧩</span> 結合ユニット</div>
+    <input type="file" id="joinInput" accept="image/png" multiple>
+    <div id="joinStatus" class="status-msg"></div>
+    <button id="joinGenBtn" class="btn" disabled>画像を結合して保存</button>
+</div>
+
+<div class="card">
+    <div class="section-header"><span>✂️</span> 分割ユニット</div>
+    <input type="file" id="splitInput" accept="image/png">
+    <button id="splitGenBtn" class="btn" disabled>リサイズ分割実行</button>
+    <div id="splitStatus" class="status-msg"></div>
+    <div id="gridPreview" class="grid-container"></div>
+    <button id="splitDownloadBtn" class="btn btn-save-all">全タイルを一括保存</button>
+</div>
+
+<canvas id="mainCanvas"></canvas>
+
+<script>
+    let CONFIG = {
+        mode: 'emoji',
+        tileW: 180, tileH: 180,
+        cols: 3, rows: 3,
+        total: 9,
+        bg: '#2dd4bf'
+    };
+
+    const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d', { alpha: true });
+    
+    function initApp(mode) {
+        if(mode === 'emoji') {
+            CONFIG = { mode:'emoji', tileW:180, tileH:180, cols:3, rows:3, total:9, color:'#2dd4bf' };
+            document.getElementById('modeBadge').textContent = 'EMOJI';
+            document.getElementById('modeBadge').style.backgroundColor = 'var(--accent)';
+            document.getElementById('subTitle').textContent = '180PX ALPHA MASTER';
+        } else {
+            CONFIG = { mode:'stamp', tileW:370, tileH:320, cols:4, rows:10, total:40, color:'#fb923c' };
+            document.getElementById('modeBadge').textContent = 'STAMP';
+            document.getElementById('modeBadge').style.backgroundColor = 'var(--orange)';
+            document.getElementById('subTitle').textContent = '370x320PX STAMP MASTER';
+        }
+        
+        document.getElementById('gridPreview').style.gridTemplateColumns = `repeat(${CONFIG.cols}, 1fr)`;
+        document.getElementById('joinStatus').textContent = `画像を選択してください (${CONFIG.total}枚必要)`;
+        document.getElementById('modeOverlay').style.display = 'none';
+    }
+
+    function loadImg(f) { 
+        return new Promise(r => { 
+            const i = new Image(); 
+            i.onload = () => { r(i); URL.revokeObjectURL(i.src); }; 
+            i.src = URL.createObjectURL(f); 
+        }); 
+    }
+
+    // --- 結合 ---
+    const jIn = document.getElementById('joinInput'), jBtn = document.getElementById('joinGenBtn'), jStat = document.getElementById('joinStatus');
+    jIn.onchange = () => {
+        const count = jIn.files.length;
+        jStat.textContent = count === CONFIG.total ? "準備完了！" : `現在 ${count} 枚選択中 (あと ${CONFIG.total-count} 枚)`;
+        jBtn.disabled = count < CONFIG.total;
+    };
+
+    jBtn.onclick = async () => {
+        const fullW = CONFIG.tileW * CONFIG.cols;
+        const fullH = CONFIG.tileH * CONFIG.rows;
+        canvas.width = fullW; canvas.height = fullH;
+        ctx.clearRect(0, 0, fullW, fullH);
+        
+        for (let i = 0; i < CONFIG.total; i++) {
+            const img = await loadImg(jIn.files[i]);
+            const x = (i % CONFIG.cols) * CONFIG.tileW;
+            const y = Math.floor(i / CONFIG.cols) * CONFIG.tileH;
+            ctx.drawImage(img, x, y, CONFIG.tileW, CONFIG.tileH);
+        }
+        const a = document.createElement('a');
+        a.download = `Joined_${CONFIG.mode}_${Date.now()}.png`;
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+    };
+
+    // --- 分割 ---
+    const sIn = document.getElementById('splitInput'), sBtn = document.getElementById('splitGenBtn');
+    const gridPreview = document.getElementById('gridPreview'), sDownload = document.getElementById('splitDownloadBtn'), sStat = document.getElementById('splitStatus');
+    let tiles = [];
+
+    sIn.onchange = () => {
+        sBtn.disabled = !sIn.files.length;
+        gridPreview.style.display = 'none';
+        sDownload.style.display = 'none';
+    };
+
+    sBtn.onclick = async () => {
+        const originalImg = await loadImg(sIn.files[0]);
+        const fullW = CONFIG.tileW * CONFIG.cols;
+        const fullH = CONFIG.tileH * CONFIG.rows;
+        
+        // リサイズ用Canvas (アスペクト比維持のリサイズ)
+        const resizeCanvas = document.createElement('canvas');
+        resizeCanvas.width = fullW; resizeCanvas.height = fullH;
+        const rCtx = resizeCanvas.getContext('2d', { alpha: true });
+
+        // Fit & Center
+        const scale = Math.max(fullW / originalImg.width, fullH / originalImg.height);
+        const nw = originalImg.width * scale;
+        const nh = originalImg.height * scale;
+        const nx = (fullW - nw) / 2;
+        const ny = (fullH - nh) / 2;
+        
+        rCtx.clearRect(0, 0, fullW, fullH);
+        rCtx.drawImage(originalImg, nx, ny, nw, nh);
+        
+        tiles = [];
+        gridPreview.innerHTML = "";
+        
+        for (let i = 0; i < CONFIG.total; i++) {
+            const tCanvas = document.createElement('canvas');
+            tCanvas.width = CONFIG.tileW; tCanvas.height = CONFIG.tileH;
+            const tCtx = tCanvas.getContext('2d', { alpha: true });
+            
+            const sx = (i % CONFIG.cols) * CONFIG.tileW;
+            const sy = Math.floor(i / CONFIG.cols) * CONFIG.tileH;
+            
+            tCtx.drawImage(resizeCanvas, sx, sy, CONFIG.tileW, CONFIG.tileH, 0, 0, CONFIG.tileW, CONFIG.tileH);
+            
+            const dataUrl = tCanvas.toDataURL('image/png');
+            tiles.push(dataUrl);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'tile-wrapper';
+            wrapper.style.aspectRatio = `${CONFIG.tileW} / ${CONFIG.tileH}`;
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.onclick = () => {
+                const a = document.createElement('a');
+                a.download = `${CONFIG.mode}_tile_${i+1}.png`;
+                a.href = dataUrl;
+                a.click();
+            };
+            wrapper.appendChild(img);
+            gridPreview.appendChild(wrapper);
+        }
+        
+        gridPreview.style.display = 'grid';
+        sDownload.style.display = 'block';
+        sStat.textContent = `${CONFIG.mode.toUpperCase()}用に${CONFIG.total}分割しました`;
+    };
+
+    sDownload.onclick = async () => {
+        for (let i = 0; i < tiles.length; i++) {
+            const a = document.createElement('a');
+            a.download = `${CONFIG.mode}_${i+1}.png`;
+            a.href = tiles[i];
+            a.click();
+            await new Promise(r => setTimeout(r, 600));
+        }
+    };
+</script>
+</body>
+</html>
