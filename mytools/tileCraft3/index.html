@@ -64,11 +64,11 @@
     <h1 style="color:white; margin-bottom:30px;">Select Mode</h1>
     <div class="mode-card" onclick="initApp('emoji')">
         <h2>LINE Emoji</h2>
-        <p>180x180px | 3x3 Fixed Grid</p>
+        <p>180x180px | 3x3 Grid</p>
     </div>
     <div class="mode-card" onclick="initApp('stamp')" style="border-color:var(--orange)">
         <h2 style="color:var(--orange)">LINE Stamp</h2>
-        <p>370x320px | 4 Columns (Flexible Rows)</p>
+        <p>370x320px | 4 Columns (Flex Rows)</p>
     </div>
 </div>
 
@@ -105,16 +105,28 @@
             document.getElementById('modeBadge').textContent = 'EMOJI';
             document.getElementById('modeBadge').style.backgroundColor = 'var(--accent)';
             document.getElementById('subTitle').textContent = '180PX ALPHA MASTER';
-            document.getElementById('joinStatus').textContent = "画像を選択してください (9枚必要)";
         } else {
             CONFIG = { mode:'stamp', tileW:370, tileH:320, cols:4, isFixed:false, color:'#fb923c' };
             document.getElementById('modeBadge').textContent = 'STAMP';
             document.getElementById('modeBadge').style.backgroundColor = 'var(--orange)';
             document.getElementById('subTitle').textContent = '370x320PX FLEX STAMP';
-            document.getElementById('joinStatus').textContent = "画像を選択してください (4の倍数推奨)";
         }
         document.getElementById('gridPreview').style.gridTemplateColumns = `repeat(${CONFIG.cols}, 1fr)`;
         document.getElementById('modeOverlay').style.display = 'none';
+        updateJoinStatus();
+    }
+
+    function updateJoinStatus() {
+        const count = document.getElementById('joinInput').files.length;
+        const jStat = document.getElementById('joinStatus');
+        const jBtn = document.getElementById('joinGenBtn');
+        if(CONFIG.isFixed) {
+            jStat.textContent = count === 9 ? "準備完了！" : `現在 ${count} 枚 (9枚必要)`;
+            jBtn.disabled = count < 9;
+        } else {
+            jStat.textContent = `現在 ${count} 枚選択中 (4列構成になります)`;
+            jBtn.disabled = count === 0;
+        }
     }
 
     function loadImg(f) { 
@@ -126,71 +138,49 @@
     }
 
     // --- 結合 ---
-    jIn = document.getElementById('joinInput'), jBtn = document.getElementById('joinGenBtn'), jStat = document.getElementById('joinStatus');
-    jIn.onchange = () => {
-        const count = jIn.files.length;
-        if(CONFIG.isFixed) {
-            jStat.textContent = count === 9 ? "準備完了！" : `現在 ${count} 枚 (9枚必要)`;
-            jBtn.disabled = count < 9;
-        } else {
-            jStat.textContent = `現在 ${count} 枚選択中`;
-            jBtn.disabled = count === 0;
-        }
-    };
-
-    jBtn.onclick = async () => {
-        const count = jIn.files.length;
+    document.getElementById('joinInput').onchange = updateJoinStatus;
+    document.getElementById('joinGenBtn').onclick = async () => {
+        const files = document.getElementById('joinInput').files;
+        const count = files.length;
         const rows = Math.ceil(count / CONFIG.cols);
-        const fullW = CONFIG.tileW * CONFIG.cols;
-        const fullH = CONFIG.tileH * rows;
-        
-        canvas.width = fullW; canvas.height = fullH;
-        ctx.clearRect(0, 0, fullW, fullH);
+        canvas.width = CONFIG.tileW * CONFIG.cols;
+        canvas.height = CONFIG.tileH * rows;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         for (let i = 0; i < count; i++) {
-            const img = await loadImg(jIn.files[i]);
-            const x = (i % CONFIG.cols) * CONFIG.tileW;
-            const y = Math.floor(i / CONFIG.cols) * CONFIG.tileH;
-            ctx.drawImage(img, x, y, CONFIG.tileW, CONFIG.tileH);
+            const img = await loadImg(files[i]);
+            ctx.drawImage(img, (i % CONFIG.cols) * CONFIG.tileW, Math.floor(i / CONFIG.cols) * CONFIG.tileH, CONFIG.tileW, CONFIG.tileH);
         }
-        const a = document.createElement('a');
-        a.download = `Joined_${CONFIG.mode}_${Date.now()}.png`;
-        a.href = canvas.toDataURL('image/png');
-        a.click();
+        const a = document.createElement('a'); a.download = `Joined_${Date.now()}.png`; a.href = canvas.toDataURL('image/png'); a.click();
     };
 
     // --- 分割 ---
-    const sIn = document.getElementById('splitInput'), sBtn = document.getElementById('splitGenBtn');
-    const gridPreview = document.getElementById('gridPreview'), sDownload = document.getElementById('splitDownloadBtn'), sStat = document.getElementById('splitStatus');
     let tiles = [];
+    document.getElementById('splitInput').onchange = () => {
+        document.getElementById('splitGenBtn').disabled = !document.getElementById('splitInput').files.length;
+        document.getElementById('gridPreview').style.display = 'none';
+        document.getElementById('splitDownloadBtn').style.display = 'none';
+    };
 
-    sBtn.onclick = async () => {
-        const originalImg = await loadImg(sIn.files[0]);
-        const fullW = CONFIG.tileW * CONFIG.cols;
+    document.getElementById('splitGenBtn').onclick = async () => {
+        const originalImg = await loadImg(document.getElementById('splitInput').files[0]);
+        const targetWidth = CONFIG.tileW * CONFIG.cols; // 1480px (Stamp) or 540px (Emoji)
         
-        // 行数の決定
-        let rows;
-        if(CONFIG.isFixed) {
-            rows = CONFIG.rows;
-        } else {
-            // 画像の幅を基準に、どれくらいの高さになるか計算
-            const scale = fullW / originalImg.width;
-            const projectedH = originalImg.height * scale;
-            rows = Math.ceil(projectedH / CONFIG.tileH);
-        }
-
-        const fullH = CONFIG.tileH * rows;
+        // 行数の計算（誤差防止のため+0.1してから切り捨て、または端数があれば切り上げ）
+        const scale = targetWidth / originalImg.width;
+        const projectedHeight = originalImg.height * scale;
+        const rows = CONFIG.isFixed ? CONFIG.rows : Math.ceil(projectedHeight / CONFIG.tileH - 0.001); 
+        
+        const targetHeight = CONFIG.tileH * rows;
         
         const resizeCanvas = document.createElement('canvas');
-        resizeCanvas.width = fullW; resizeCanvas.height = fullH;
+        resizeCanvas.width = targetWidth;
+        resizeCanvas.height = targetHeight;
         const rCtx = resizeCanvas.getContext('2d', { alpha: true });
-
-        // 横幅いっぱいに合わせて描画（足りない高さは透明になる）
-        const drawW = fullW;
-        const drawH = originalImg.height * (fullW / originalImg.width);
-        rCtx.drawImage(originalImg, 0, 0, drawW, drawH);
+        rCtx.drawImage(originalImg, 0, 0, targetWidth, Math.round(projectedHeight));
         
         tiles = [];
+        const gridPreview = document.getElementById('gridPreview');
         gridPreview.innerHTML = "";
         const totalTiles = CONFIG.cols * rows;
         
@@ -199,10 +189,9 @@
             tCanvas.width = CONFIG.tileW; tCanvas.height = CONFIG.tileH;
             const tCtx = tCanvas.getContext('2d', { alpha: true });
             
-            const sx = (i % CONFIG.cols) * CONFIG.tileW;
-            const sy = Math.floor(i / CONFIG.cols) * CONFIG.tileH;
-            
-            tCtx.drawImage(resizeCanvas, sx, sy, CONFIG.tileW, CONFIG.tileH, 0, 0, CONFIG.tileW, CONFIG.tileH);
+            tCtx.drawImage(resizeCanvas, 
+                (i % CONFIG.cols) * CONFIG.tileW, Math.floor(i / CONFIG.cols) * CONFIG.tileH, 
+                CONFIG.tileW, CONFIG.tileH, 0, 0, CONFIG.tileW, CONFIG.tileH);
             
             const dataUrl = tCanvas.toDataURL('image/png');
             tiles.push(dataUrl);
@@ -212,27 +201,22 @@
             wrapper.style.aspectRatio = `${CONFIG.tileW} / ${CONFIG.tileH}`;
             const img = document.createElement('img');
             img.src = dataUrl;
-            img.onclick = () => {
-                const a = document.createElement('a');
-                a.download = `${CONFIG.mode}_tile_${i+1}.png`; a.href = dataUrl; a.click();
-            };
+            img.onclick = () => { const a = document.createElement('a'); a.download = `tile_${i+1}.png`; a.href = dataUrl; a.click(); };
             wrapper.appendChild(img);
             gridPreview.appendChild(wrapper);
         }
         
         gridPreview.style.display = 'grid';
-        sDownload.style.display = 'block';
-        sStat.textContent = `${CONFIG.cols}列 x ${rows}行 (${totalTiles}枚) に分割しました`;
+        document.getElementById('splitDownloadBtn').style.display = 'block';
+        document.getElementById('splitStatus').textContent = `${CONFIG.cols}x${rows} (${totalTiles}枚) に分割完了`;
     };
 
-    sDownload.onclick = async () => {
+    document.getElementById('splitDownloadBtn').onclick = async () => {
         for (let i = 0; i < tiles.length; i++) {
-            const a = document.createElement('a');
-            a.download = `${CONFIG.mode}_${i+1}.png`; a.href = tiles[i]; a.click();
+            const a = document.createElement('a'); a.download = `tile_${i+1}.png`; a.href = tiles[i]; a.click();
             await new Promise(r => setTimeout(r, 600));
         }
     };
-    sIn.onchange = () => { sBtn.disabled = !sIn.files.length; gridPreview.style.display = 'none'; sDownload.style.display = 'none'; };
 </script>
 </body>
 </html>
