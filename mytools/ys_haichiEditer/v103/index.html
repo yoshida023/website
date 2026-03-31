@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>preBuild for hp2025</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary: #00b900;
+            --accent: #007aff;
+            --multi: #6f42c1;
+            --emoji: #ff9500;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body { 
+            font-family: -apple-system, sans-serif; 
+            background: var(--bg-color); 
+            margin: 0; 
+            padding: 10px; 
+            padding-bottom: 150px;
+        }
+
+        #mode-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 2000;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .mode-selector {
+            background: white; padding: 30px; border-radius: 15px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .mode-btn {
+            padding: 15px 30px; margin: 10px; border: none; border-radius: 10px;
+            font-size: 18px; font-weight: bold; cursor: pointer; color: white;
+            transition: transform 0.2s;
+        }
+        .btn-stamp-mode { background: var(--primary); }
+        .btn-emoji-mode { background: var(--emoji); }
+
+        h1 { font-size: 1.2rem; text-align: center; margin: 5px 0; color: #333; }
+        .mode-badge { 
+            display: inline-block; padding: 2px 8px; border-radius: 4px; 
+            font-size: 10px; vertical-align: middle; margin-left: 5px; color: white;
+        }
+
+        .action-panel {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 10px; margin-bottom: 15px;
+        }
+
+        .btn-multi {
+            background: var(--multi); color: white; padding: 12px 20px;
+            border-radius: 8px; font-size: 14px; border: none; font-weight: bold;
+        }
+
+        .resize-control {
+            background: #fff; padding: 8px 15px; border-radius: 20px;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 12px;
+        }
+
+        .header-container {
+            display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;
+        }
+        .header-container .item-card { width: 45%; }
+        .hidden { display: none !important; }
+
+        .stamp-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 8px; width: 100%;
+        }
+
+        .item-card {
+            background: var(--card-bg); border-radius: 8px; padding: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;
+            border: 2px solid transparent; position: relative;
+        }
+        .item-card.has-image { border-color: var(--accent); }
+
+        .drag-handle { 
+            display: block; font-size: 11px; font-weight: bold; color: #fff;
+            background: #999; border-radius: 4px; margin-bottom: 4px;
+            padding: 2px 0; cursor: grab;
+        }
+        .has-image .drag-handle { background: var(--accent); }
+
+        .preview-container {
+            width: 100%; aspect-ratio: 1 / 1; background-color: #fff;
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), 
+                              linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee);
+            background-size: 10px 10px; background-position: 0 0, 5px 5px;
+            border-radius: 4px; display: flex; align-items: center;
+            justify-content: center; margin-bottom: 6px; overflow: hidden;
+            border: 1px solid #ddd;
+        }
+
+        img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        .controls { display: flex; gap: 4px; }
+        button.small-btn {
+            border: none; border-radius: 4px; padding: 8px 0;
+            font-size: 10px; flex: 1; font-weight: bold;
+        }
+        .btn-upload { background: #e3f2fd; color: var(--accent); }
+        .btn-delete { background: #fee; color: #e57373; }
+
+        .footer-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95); padding: 15px;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+            display: flex; justify-content: center; z-index: 1000;
+        }
+
+        .btn-zip {
+            background: var(--primary); color: white; padding: 14px 0;
+            font-size: 16px; border-radius: 10px; width: 90%;
+            border: none; font-weight: bold;
+        }
+
+        .sortable-swap-highlight {
+            background-color: rgba(0, 122, 255, 0.1) !important;
+            border: 2px dashed var(--accent) !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="mode-overlay">
+    <div class="mode-selector">
+        <h2>制作モードを選択</h2>
+        <button class="mode-btn btn-stamp-mode" onclick="initApp('stamp')">LINEスタンプ</button>
+        <button class="mode-btn btn-emoji-mode" onclick="initApp('emoji')">LINE絵文字</button>
+    </div>
+</div>
+
+<h1>配置エディタ v1.1 <span id="mode-display" class="mode-badge"></span></h1>
+
+<div class="action-panel">
+    <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード</button>
+    <div class="resize-control">
+        <label><input type="checkbox" id="resize-toggle" checked> 自動リサイズを有効にする</label>
+    </div>
+</div>
+
+<div class="header-container">
+    <div class="item-card" id="card-main">
+        <span class="label" style="font-size:10px; color:#666; font-weight:bold;">main (240x240)</span>
+        <div class="preview-container"></div>
+        <div class="controls">
+            <button class="small-btn btn-upload" onclick="triggerSingleUpload('main')">UP</button>
+            <button class="small-btn btn-delete" onclick="deleteImage('card-main')">×</button>
+        </div>
+    </div>
+    <div class="item-card" id="card-tab">
+        <span class="label" style="font-size:10px; color:#666; font-weight:bold;">tab (96x74)</span>
+        <div class="preview-container"></div>
+        <div class="controls">
+            <button class="small-btn btn-upload" onclick="triggerSingleUpload('tab')">UP</button>
+            <button class="small-btn btn-delete" onclick="deleteImage('card-tab')">×</button>
+        </div>
+    </div>
+</div>
+
+<div id="sortable-grid" class="stamp-grid"></div>
+
+<div class="footer-bar">
+    <button class="btn-zip" onclick="generateZip()">ZIPを生成して保存</button>
+</div>
+
+<input type="file" id="file-input-single" accept="image/png,image/jpeg" style="display:none">
+<input type="file" id="file-input-multi" accept="image/png,image/jpeg" multiple style="display:none">
+
+<script>
+    const grid = document.getElementById('sortable-grid');
+    const singleInput = document.getElementById('file-input-single');
+    const multiInput = document.getElementById('file-input-multi');
+    const resizeToggle = document.getElementById('resize-toggle');
+    const modeOverlay = document.getElementById('mode-overlay');
+    const modeDisplay = document.getElementById('mode-display');
+    const mainCard = document.getElementById('card-main');
+    
+    let currentMode = 'stamp';
+    let currentSingleTargetId = null;
+
+    function initApp(mode) {
+        currentMode = mode;
+        modeOverlay.classList.add('hidden');
+        
+        if (mode === 'emoji') {
+            modeDisplay.innerText = '絵文字モード';
+            modeDisplay.style.background = 'var(--emoji)';
+            mainCard.style.display = 'none'; // 絵文字には main画像がない
+            createGrid(40);
+        } else {
+            modeDisplay.innerText = 'スタンプモード';
+            modeDisplay.style.background = 'var(--primary)';
+            mainCard.style.display = 'block';
+            createGrid(40);
+        }
+    }
+
+    function createGrid(count) {
+        grid.innerHTML = '';
+        for (let i = 1; i <= count; i++) {
+            const id = String(i).padStart(2, '0');
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            card.id = `card-${id}`;
+            card.innerHTML = `
+                <span class="drag-handle">${id}</span>
+                <div class="preview-container"></div>
+                <div class="controls">
+                    <button class="small-btn btn-upload" onclick="triggerSingleUpload('${id}')">UP</button>
+                    <button class="small-btn btn-delete" onclick="deleteImage('card-${id}')">×</button>
+                </div>
+            `;
+            grid.appendChild(card);
+        }
+
+        new Sortable(grid, {
+            swap: true,
+            swapClass: 'sortable-swap-highlight',
+            handle: '.drag-handle',
+            animation: 150,
+            onEnd: () => reLabelCards()
+        });
+    }
+
+    function reLabelCards() {
+        grid.querySelectorAll('.item-card').forEach((card, index) => {
+            card.querySelector('.drag-handle').innerText = String(index + 1).padStart(2, '0');
+        });
+    }
+
+    function triggerSingleUpload(id) {
+        currentSingleTargetId = id;
+        singleInput.click();
+    }
+
+    singleInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) renderToCard(file, `card-${currentSingleTargetId}`);
+        e.target.value = "";
+    };
+
+    function triggerMultiUpload() {
+        multiInput.click();
+    }
+
+    multiInput.onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        const stampCards = Array.from(grid.querySelectorAll('.item-card'));
+        const leftoverFiles = [];
+
+        for (const file of files) {
+            const fileName = file.name.toLowerCase();
+            const baseName = fileName.split('.')[0];
+
+            if (currentMode === 'stamp' && fileName.includes('main')) {
+                await renderToCard(file, 'card-main');
+            } else if (fileName.includes('tab')) {
+                await renderToCard(file, 'card-tab');
+            } else {
+                const numMatch = baseName.match(/\d+/);
+                if (numMatch) {
+                    const num = numMatch[0].padStart(2, '0');
+                    const targetCard = document.getElementById(`card-${num}`);
+                    if (targetCard) {
+                        await renderToCard(file, targetCard.id);
+                    } else { leftoverFiles.push(file); }
+                } else { leftoverFiles.push(file); }
+            }
+        }
+
+        let cardIdx = 0;
+        for (const file of leftoverFiles) {
+            while (cardIdx < stampCards.length) {
+                const card = stampCards[cardIdx];
+                if (!card.classList.contains('has-image')) {
+                    await renderToCard(file, card.id);
+                    cardIdx++;
+                    break;
+                }
+                cardIdx++;
+            }
+        }
+        e.target.value = "";
+    };
+
+    function renderToCard(file, cardId) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const card = document.getElementById(cardId);
+                if(card) {
+                    card.querySelector('.preview-container').innerHTML = `<img src="${e.target.result}">`;
+                    card.classList.add('has-image');
+                }
+                resolve();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function deleteImage(cardId) {
+        const card = document.getElementById(cardId);
+        card.querySelector('.preview-container').innerHTML = "";
+        card.classList.remove('has-image');
+    }
+
+    async function generateZip() {
+        const zip = new JSZip();
+        const isResizeEnabled = resizeToggle.checked;
+
+        // スタンプモード時のみ main.png を処理
+        if (currentMode === 'stamp') {
+            await addToZip(zip, 'card-main', 240, 240, 'main.png', isResizeEnabled);
+        }
+        
+        // タブ画像は両方のモードで共通 (96x74)
+        await addToZip(zip, 'card-tab', 96, 74, 'tab.png', isResizeEnabled);
+        
+        const cards = grid.querySelectorAll('.item-card');
+        const targetW = (currentMode === 'emoji') ? 180 : 370;
+        const targetH = (currentMode === 'emoji') ? 180 : 320;
+
+        for (const card of cards) {
+            if (!card.classList.contains('has-image')) continue;
+            const label = card.querySelector('.drag-handle').innerText;
+            await addToZip(zip, card.id, targetW, targetH, `${label}.png`, isResizeEnabled);
+        }
+
+        if (Object.keys(zip.files).length === 0) return alert("画像がありません");
+
+        const content = await zip.generateAsync({type: "blob"});
+        const prefix = currentMode === 'emoji' ? 'emoji' : 'stamp';
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(content);
+        link.download = `${prefix}_${new Date().getTime()}.zip`;
+        link.click();
+    }
+
+    async function addToZip(zip, elementId, maxW, maxH, fileName, isResizeEnabled) {
+        const img = document.getElementById(elementId)?.querySelector('img');
+        if (!img) return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        let drawW, drawH;
+
+        if (isResizeEnabled) {
+            // アスペクト比を保ちつつ、maxW/maxHの枠に収まるサイズを計算
+            const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+            drawW = Math.round(img.naturalWidth * ratio);
+            drawH = Math.round(img.naturalHeight * ratio);
+        } else {
+            drawW = img.naturalWidth;
+            drawH = img.naturalHeight;
+        }
+
+        canvas.width = drawW;
+        canvas.height = drawH;
+        ctx.drawImage(img, 0, 0, drawW, drawH);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        zip.file(fileName, blob);
+    }
+</script>
+
+</body>
+</html>
