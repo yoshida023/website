@@ -139,7 +139,7 @@
     </div>
 </div>
 
-<h1>配置エディタ v1.1 <span id="mode-display" class="mode-badge"></span></h1>
+<h1>配置エディタ v1.2 <span id="mode-display" class="mode-badge"></span></h1>
 
 <div class="action-panel">
     <button class="btn-multi" onclick="triggerMultiUpload()">一括アップロード</button>
@@ -195,20 +195,20 @@
         if (mode === 'emoji') {
             modeDisplay.innerText = '絵文字モード';
             modeDisplay.style.background = 'var(--emoji)';
-            mainCard.style.display = 'none'; // 絵文字には main画像がない
-            createGrid(40);
+            mainCard.style.display = 'none';
+            createGrid(40, 3); // 3桁パディング
         } else {
             modeDisplay.innerText = 'スタンプモード';
             modeDisplay.style.background = 'var(--primary)';
             mainCard.style.display = 'block';
-            createGrid(40);
+            createGrid(40, 2); // 2桁パディング
         }
     }
 
-    function createGrid(count) {
+    function createGrid(count, padding) {
         grid.innerHTML = '';
         for (let i = 1; i <= count; i++) {
-            const id = String(i).padStart(2, '0');
+            const id = String(i).padStart(padding, '0');
             const card = document.createElement('div');
             card.className = 'item-card';
             card.id = `card-${id}`;
@@ -233,8 +233,10 @@
     }
 
     function reLabelCards() {
+        const padding = (currentMode === 'emoji') ? 3 : 2;
         grid.querySelectorAll('.item-card').forEach((card, index) => {
-            card.querySelector('.drag-handle').innerText = String(index + 1).padStart(2, '0');
+            const newId = String(index + 1).padStart(padding, '0');
+            card.querySelector('.drag-handle').innerText = newId;
         });
     }
 
@@ -245,7 +247,8 @@
 
     singleInput.onchange = (e) => {
         const file = e.target.files[0];
-        if (file) renderToCard(file, `card-${currentSingleTargetId}`);
+        const padding = (currentMode === 'emoji') ? 3 : 2;
+        if (file) renderToCard(file, `card-${String(currentSingleTargetId).padStart(padding, '0')}`);
         e.target.value = "";
     };
 
@@ -257,6 +260,7 @@
         const files = Array.from(e.target.files);
         const stampCards = Array.from(grid.querySelectorAll('.item-card'));
         const leftoverFiles = [];
+        const padding = (currentMode === 'emoji') ? 3 : 2;
 
         for (const file of files) {
             const fileName = file.name.toLowerCase();
@@ -269,7 +273,7 @@
             } else {
                 const numMatch = baseName.match(/\d+/);
                 if (numMatch) {
-                    const num = numMatch[0].padStart(2, '0');
+                    const num = numMatch[0].padStart(padding, '0');
                     const targetCard = document.getElementById(`card-${num}`);
                     if (targetCard) {
                         await renderToCard(file, targetCard.id);
@@ -318,12 +322,10 @@
         const zip = new JSZip();
         const isResizeEnabled = resizeToggle.checked;
 
-        // スタンプモード時のみ main.png を処理
         if (currentMode === 'stamp') {
             await addToZip(zip, 'card-main', 240, 240, 'main.png', isResizeEnabled);
         }
         
-        // タブ画像は両方のモードで共通 (96x74)
         await addToZip(zip, 'card-tab', 96, 74, 'tab.png', isResizeEnabled);
         
         const cards = grid.querySelectorAll('.item-card');
@@ -358,7 +360,6 @@
         let drawW, drawH;
 
         if (isResizeEnabled) {
-            // アスペクト比を保ちつつ、maxW/maxHの枠に収まるサイズを計算
             const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
             drawW = Math.round(img.naturalWidth * ratio);
             drawH = Math.round(img.naturalHeight * ratio);
