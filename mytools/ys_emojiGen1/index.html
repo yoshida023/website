@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>YS絵文字ジェネレータ</title>
+    <style>
+        :root { --primary-color: #ec71a1; --line-bg: #84a2d4; --line-bubble: #74eb7a; }
+        
+        body { 
+            font-family: sans-serif; 
+            background: #fdfdfd; display: flex; flex-direction: column; align-items: center; padding: 20px; color: #333; margin: 0; 
+        }
+        
+        .app-header { text-align: center; margin-bottom: 20px; width: 100%; max-width: 1200px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+        .app-title { font-size: 1.2rem; color: var(--primary-color); font-weight: bold; }
+
+        .main-container { display: flex; flex-direction: row; gap: 30px; width: 100%; max-width: 1200px; justify-content: center; align-items: flex-start; }
+        
+        /* エディタパネル */
+        .editor-panel { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); width: 440px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; position: sticky; top: 20px; }
+        .full-width { grid-column: span 2; }
+        textarea { width: 100%; height: 80px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; resize: none; font-family: inherit; }
+        
+        .config-grid { display: grid; grid-template-columns: 60px repeat(4, 1fr); gap: 8px; align-items: center; margin-top: 5px; }
+        .config-label { font-size: 10px; font-weight: bold; color: #666; text-align: center; }
+        input[type="color"], input[type="number"], input[type="text"], select.ui-select { border: 1px solid #ddd; border-radius: 6px; width: 100%; height: 32px; cursor: pointer; text-align: center; font-size: 13px; }
+        
+        .storage-controls { background: #f9f9f9; padding: 12px; border-radius: 10px; border: 1px dashed #ccc; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .storage-row { display: flex; gap: 5px; }
+        .storage-select { flex: 1; height: 32px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
+
+        .btn-group { display: flex; gap: 5px; grid-column: span 2; margin-top: 10px; }
+        .btn-action { flex: 1; padding: 10px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: bold; border: none; font-family: inherit; }
+        .btn-update { background: var(--primary-color); color: white; }
+        .btn-reset { background: #eee; color: #666; }
+        .btn-dl { background: white; border: 1px solid var(--primary-color); color: var(--primary-color); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: bold; font-family: inherit; }
+
+        /* プレビュー */
+        .preview-panel { display: grid; grid-template-columns: 1fr; gap: 15px; width: 320px; }
+        .preview-box { background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); overflow: hidden; }
+        .preview-label { font-size: 0.7rem; color: #888; margin-bottom: 8px; display: block; font-weight: bold; }
+        
+        .chat-room { width: 100%; background: var(--line-bg); padding: 15px 10px; border-radius: 10px; box-sizing: border-box; display: flex; align-items: flex-end; justify-content: flex-end; min-height: 125px; position: relative; }
+        .line-time { font-size: 10px; color: rgba(255,255,255,0.8); margin-right: 4px; margin-bottom: 2px; }
+        
+        .emoji-unit { object-fit: contain; }
+        .line-emoji-1 { width: 100px; height: 100px; }
+        .line-emoji-2 { width: 75px; height: 75px; }
+        .line-emoji-3 { width: 60px; height: 60px; }
+        .line-emoji-4 { width: 34px; height: 34px; }
+
+        .chat-bubble { background: var(--line-bubble); padding: 6px 10px; border-radius: 14px; position: relative; display: flex; align-items: center; gap: 1px; }
+        .chat-bubble::after { content: ""; position: absolute; top: 10px; right: -7px; border-left: 9px solid var(--line-bubble); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+
+        .reaction-container { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .base-msg-small { background: var(--line-bubble); color: #333; padding: 6px 12px; border-radius: 14px; font-size: 11px; position: relative; margin-right: 5px; }
+        .base-msg-small::after { content: ""; position: absolute; top: 8px; right: -7px; border-left: 9px solid var(--line-bubble); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+        .reaction-emoji-only { width: 22px; height: 22px; object-fit: contain; margin-right: 5px; }
+
+        .selector-box { background: #f8f8f8; border-top: 1px solid #eee; display: flex; padding: 12px 8px; justify-content: center; align-items: center; gap: 15px; }
+        .selector-item { width: 42px; height: 42px; object-fit: contain; }
+        .selector-item.next { opacity: 0.3; }
+
+        canvas { display: none; }
+
+        @media (max-width: 850px) {
+            .main-container { flex-direction: column; align-items: center; }
+            .editor-panel { width: 95vw; position: static; }
+            .preview-panel { width: 95vw; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-header">
+        <div class="app-title">YS絵文字ジェネレータ</div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn-dl" onclick="downloadPNG()">PNG保存</button>
+            <button class="btn-dl" onclick="downloadSVG()">SVG保存</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="editor-panel">
+            <div class="row full-width">
+                <textarea id="textInput" oninput="draw()">了解&#10;しました</textarea>
+            </div>
+            
+            <div class="full-width config-grid">
+                <div class="config-label">設定</div>
+                <div class="config-label">1行目</div><div class="config-label">2行目</div><div class="config-label">3行目</div><div class="config-label">4行〜</div>
+                <div class="config-label">カラー</div>
+                <input type="color" id="c1" value="#ec71a1" onchange="draw()"><input type="color" id="c2" value="#4a90e2" onchange="draw()"><input type="color" id="c3" value="#f5a623" onchange="draw()"><input type="color" id="c4" value="#7ed321" onchange="draw()">
+                <div class="config-label">サイズ</div>
+                <input type="number" id="baseSize" value="80" oninput="draw()"><input type="number" id="s2" value="100" oninput="draw()"><input type="number" id="s3" value="100" oninput="draw()"><input type="number" id="s4" value="100" oninput="draw()">
+            </div>
+
+            <div class="row">
+                <label style="font-size:11px; font-weight:bold;">フォント</label>
+                <select id="fontFamily" class="ui-select" onchange="draw()">
+                    <option value='sans-serif'>標準ゴシック</option>
+                    <option value='"Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif'>ヒラギノ角ゴ</option>
+                    <option value='"Yu Gothic", YuGothic, sans-serif'>遊ゴシック</option>
+                    <option value='"Meiryo", sans-serif'>メイリオ</option>
+                    <option value='serif'>標準明朝</option>
+                    <option value='"Hiragino Mincho ProN", serif'>ヒラギノ明朝</option>
+                    <option value='"Yu Mincho", YuMincho, serif'>遊明朝</option>
+                    <option value='cursive'>丸ゴシック系</option>
+                </select>
+            </div>
+
+            <div class="row">
+                <label style="font-size:11px; font-weight:bold;">配置</label>
+                <div style="display:flex; gap:4px;" id="alignGroup">
+                    <button onclick="updateAlign('left', this)" style="flex:1; padding:6px; font-size:11px;">左</button>
+                    <button onclick="updateAlign('center', this)" class="active" style="flex:1; padding:6px; font-size:11px;">中</button>
+                    <button onclick="updateAlign('right', this)" style="flex:1; padding:6px; font-size:11px;">右</button>
+                </div>
+            </div>
+
+            <div class="row">
+                <label style="font-size:11px; font-weight:bold;">縁取り</label>
+                <div style="display:flex; gap:4px;">
+                    <input type="number" id="sWidth" value="8" oninput="draw()" style="width:40%;"><input type="color" id="sColor" value="#ffffff" onchange="draw()">
+                </div>
+            </div>
+            <div class="row full-width" style="display:flex; align-items:center; gap:5px; font-size:11px;">
+                <input type="checkbox" id="forceStretch" onchange="draw()"><span>横幅いっぱいに拡大</span>
+            </div>
+
+            <div class="full-width storage-controls">
+                <div style="font-size:10px; font-weight:bold; color:#888;">設定の保存と読込</div>
+                <div class="storage-row">
+                    <input type="text" id="saveName" placeholder="設定名" style="flex:1; font-size:11px;">
+                    <button onclick="saveSettings()" style="font-size:11px; cursor:pointer;">保存</button>
+                </div>
+                <div class="storage-row">
+                    <select id="savedList" class="storage-select" onchange="loadSettings()"></select>
+                    <button onclick="deleteSettings()" style="font-size:11px; color:red; cursor:pointer;">削除</button>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn-action btn-reset" onclick="resetSettings()">リセット</button>
+                <button class="btn-action btn-update" onclick="draw()">更新</button>
+            </div>
+        </div>
+
+        <div class="preview-panel">
+            <div class="preview-box">
+                <span class="preview-label">1個 / 2個 並び</span>
+                <div class="chat-room" style="flex-direction:column; align-items:flex-end; gap:5px;">
+                    <div><span class="line-time">12:34</span><img src="" class="emoji-unit line-emoji-1 pvImg"></div>
+                    <div style="display:flex; align-items:flex-end;"><span class="line-time">12:35</span><img src="" class="emoji-unit line-emoji-2 pvImg"><img src="" class="emoji-unit line-emoji-2 pvImg"></div>
+                </div>
+            </div>
+            <div class="preview-box">
+                <span class="preview-label">3個 / 4個(吹き出し)</span>
+                <div class="chat-room" style="flex-direction:column; align-items:flex-end; gap:8px;">
+                    <div style="display:flex; align-items:flex-end;"><span class="line-time">12:36</span><img src="" class="emoji-unit line-emoji-3 pvImg"><img src="" class="emoji-unit line-emoji-3 pvImg"><img src="" class="emoji-unit line-emoji-3 pvImg"></div>
+                    <div class="chat-bubble"><img src="" class="emoji-unit line-emoji-4 pvImg"><img src="" class="emoji-unit line-emoji-4 pvImg"><img src="" class="emoji-unit line-emoji-4 pvImg"><img src="" class="emoji-unit line-emoji-4 pvImg"></div>
+                </div>
+            </div>
+            <div class="preview-box">
+                <span class="preview-label">リアクション</span>
+                <div class="chat-room" style="align-items:flex-end; padding-bottom:15px;">
+                    <div class="reaction-container"><div class="base-msg-small">了解！</div><img src="" class="reaction-emoji-only pvImg"></div>
+                </div>
+            </div>
+            <div class="preview-box" style="padding:0;">
+                <span class="preview-label" style="padding:10px 12px 0;">スタンプ選択エリア</span>
+                <div class="selector-box">
+                    <img src="" class="selector-item pvImg">
+                    <img src="" class="selector-item next pvImg">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="emojiCanvas" width="180" height="180"></canvas>
+
+    <script>
+        let currentAlign = 'center';
+        let svgString = "";
+        const STORAGE_KEY_LAST = "prebuild_last_config";
+        const STORAGE_KEY_LIST = "prebuild_saved_list";
+
+        function updateAlign(align, btn) {
+            currentAlign = align;
+            document.querySelectorAll('#alignGroup button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            draw();
+        }
+
+        function getConfigs() { return JSON.parse(localStorage.getItem(STORAGE_KEY_LIST) || "{}"); }
+
+        function saveSettings() {
+            const name = document.getElementById('saveName').value.trim();
+            if (!name) return alert("保存名を入力してください");
+            const configs = getConfigs();
+            configs[name] = getCurrentConfig();
+            localStorage.setItem(STORAGE_KEY_LIST, JSON.stringify(configs));
+            updateSavedList();
+            alert("「" + name + "」を保存しました");
+        }
+
+        function loadSettings() {
+            const name = document.getElementById('savedList').value;
+            if (!name) return;
+            applyConfig(getConfigs()[name]);
+        }
+
+        function deleteSettings() {
+            const name = document.getElementById('savedList').value;
+            if (!name || !confirm(`「${name}」を削除しますか？`)) return;
+            const configs = getConfigs();
+            delete configs[name];
+            localStorage.setItem(STORAGE_KEY_LIST, JSON.stringify(configs));
+            updateSavedList();
+        }
+
+        function updateSavedList() {
+            const list = document.getElementById('savedList');
+            const configs = getConfigs();
+            list.innerHTML = '<option value="">-- 保存した設定を選択 --</option>';
+            Object.keys(configs).forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name; opt.textContent = name;
+                list.appendChild(opt);
+            });
+        }
+
+        function resetSettings() {
+            if(!confirm("全ての設定を初期状態に戻しますか？")) return;
+            applyConfig({
+                text: "了解\nしました", c1: "#ec71a1", c2: "#4a90e2", c3: "#f5a623", c4: "#7ed321",
+                baseSize: 80, s2: 100, s3: 100, s4: 100, align: "center", sWidth: 8, sColor: "#ffffff", forceStretch: false,
+                font: "sans-serif"
+            });
+        }
+
+        function getCurrentConfig() {
+            return {
+                text: document.getElementById('textInput').value,
+                c1: document.getElementById('c1').value, c2: document.getElementById('c2').value,
+                c3: document.getElementById('c3').value, c4: document.getElementById('c4').value,
+                baseSize: document.getElementById('baseSize').value,
+                s2: document.getElementById('s2').value, s3: document.getElementById('s3').value, s4: document.getElementById('s4').value,
+                align: currentAlign, sWidth: document.getElementById('sWidth').value,
+                sColor: document.getElementById('sColor').value, forceStretch: document.getElementById('forceStretch').checked,
+                font: document.getElementById('fontFamily').value
+            };
+        }
+
+        function applyConfig(conf) {
+            if (!conf) return;
+            document.getElementById('textInput').value = conf.text;
+            document.getElementById('c1').value = conf.c1; document.getElementById('c2').value = conf.c2;
+            document.getElementById('c3').value = conf.c3; document.getElementById('c4').value = conf.c4;
+            document.getElementById('baseSize').value = conf.baseSize;
+            document.getElementById('s2').value = conf.s2; document.getElementById('s3').value = conf.s3; document.getElementById('s4').value = conf.s4;
+            document.getElementById('sWidth').value = conf.sWidth; document.getElementById('sColor').value = conf.sColor;
+            document.getElementById('forceStretch').checked = conf.forceStretch;
+            if(conf.font) document.getElementById('fontFamily').value = conf.font;
+            currentAlign = conf.align;
+            document.querySelectorAll('#alignGroup button').forEach(b => {
+                b.classList.toggle('active', b.onclick.toString().includes(`'${conf.align}'`));
+            });
+            draw();
+        }
+
+        function draw() {
+            const canvas = document.getElementById('emojiCanvas');
+            const ctx = canvas.getContext('2d');
+            const conf = getCurrentConfig();
+            
+            localStorage.setItem(STORAGE_KEY_LAST, JSON.stringify(conf));
+
+            const scales = [1.0, conf.s2/100, conf.s3/100, conf.s4/100];
+            const colors = [conf.c1, conf.c2, conf.c3, conf.c4];
+            const lines = conf.text.split('\n');
+            const padding = 10;
+            const maxWidth = 180 - (padding * 2) - (conf.sWidth);
+            const maxHeight = 160;
+
+            let testH = lines.reduce((acc, _, i) => acc + (conf.baseSize * 0.95 * scales[Math.min(i, 3)]), 0);
+            let finalBase = testH > maxHeight ? (maxHeight/testH) * conf.baseSize : conf.baseSize;
+
+            ctx.clearRect(0, 0, 180, 180);
+            const finalH = lines.reduce((acc, _, i) => acc + (finalBase * 0.95 * scales[Math.min(i, 3)]), 0);
+            let yTracker = 90 - (finalH / 2);
+
+            const render = (isStroke) => {
+                let y = yTracker;
+                lines.forEach((line, i) => {
+                    const idx = Math.min(i, 3);
+                    const fs = finalBase * scales[idx];
+                    const lh = fs * 0.95;
+                    ctx.font = `bold ${fs}px ${conf.font}`; // 選択したフォントを使用
+                    ctx.textAlign = conf.align; ctx.textBaseline = 'middle';
+                    const w = ctx.measureText(line).width;
+                    const r = (conf.forceStretch || w > maxWidth) ? maxWidth / w : 1;
+                    const x = conf.align==='left' ? 10 + (conf.sWidth/2) : conf.align==='right' ? 170 - (conf.sWidth/2) : 90;
+                    ctx.save();
+                    ctx.translate(x, y + lh/2); ctx.scale(r, 1);
+                    if(isStroke) { ctx.strokeStyle=conf.sColor; ctx.lineWidth=conf.sWidth*2; ctx.strokeText(line, 0, 0); }
+                    else { ctx.fillStyle=colors[idx]; ctx.fillText(line, 0, 0); }
+                    ctx.restore();
+                    y += lh;
+                });
+            };
+
+            if(conf.sWidth > 0) render(true);
+            render(false);
+
+            // SVG生成
+            let svgContent = "";
+            let ySvg = yTracker;
+            lines.forEach((l, i) => {
+                const idx = Math.min(i, 3); const fs = finalBase * scales[idx]; const lh = fs * 0.95;
+                const tempCtx = document.createElement('canvas').getContext('2d');
+                tempCtx.font = `bold ${fs}px ${conf.font}`;
+                const r = (conf.forceStretch || tempCtx.measureText(l).width > maxWidth) ? maxWidth / tempCtx.measureText(l).width : 1;
+                const x = conf.align==='left' ? 10 : conf.align==='right' ? 170 : 90;
+                const anchor = conf.align==='left' ? 'start' : conf.align==='right' ? 'end' : 'middle';
+                const yPos = ySvg + lh/2;
+                const transform = r !== 1 ? `transform="translate(${x},${yPos}) scale(${r},1) translate(${-x},${-yPos})"` : "";
+                const commonAttrs = `font-family='${conf.font}' font-size="${fs}" font-weight="bold" text-anchor="${anchor}" dominant-baseline="central"`;
+                if (conf.sWidth > 0) svgContent += `<text x="${x}" y="${yPos}" ${transform} fill="none" stroke="${conf.sColor}" stroke-width="${conf.sWidth*2}" stroke-linejoin="round" ${commonAttrs}>${l}</text>`;
+                svgContent += `<text x="${x}" y="${yPos}" ${transform} fill="${colors[idx]}" ${commonAttrs}>${l}</text>`;
+                ySvg += lh;
+            });
+            svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">${svgContent}</svg>`;
+
+            const dataUrl = canvas.toDataURL();
+            document.querySelectorAll('.pvImg').forEach(img => img.src = dataUrl);
+        }
+
+        function downloadPNG() { const a = document.createElement('a'); a.download='emoji.png'; a.href=document.getElementById('emojiCanvas').toDataURL(); a.click(); }
+        function downloadSVG() { const b = new Blob([svgString], {type: 'image/svg+xml'}); const a = document.createElement('a'); a.download='emoji.svg'; a.href=URL.createObjectURL(b); a.click(); }
+
+        window.onload = () => {
+            updateSavedList();
+            const last = localStorage.getItem(STORAGE_KEY_LAST);
+            if (last) applyConfig(JSON.parse(last)); else draw();
+        };
+    </script>
+</body>
+</html>
