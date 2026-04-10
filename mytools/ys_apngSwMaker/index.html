@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>LINE APNG Studio - Direction Fixed</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+    <style>
+        :root { --primary: #00b900; --bg: #1a1a1a; --card: #2d2d2d; --text: #fff; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { background: var(--card); padding: 25px; border-radius: 12px; width: 640px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .input-card { background: #333; padding: 15px; border-radius: 8px; border: 1px solid #444; text-align: center; }
+        .preview-thumb { width: 100%; height: 120px; background: #222; margin-top: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed #555; }
+        .preview-thumb img { max-width: 100%; max-height: 100%; }
+        .config-card { background: #3d3d3d; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 20px; }
+        select { padding: 8px; border-radius: 4px; border: none; background: #fff; font-weight: bold; }
+        .canvas-area { text-align: center; border-top: 1px solid #444; padding-top: 20px; }
+        canvas { border: 4px solid #000; background: #fff; border-radius: 4px; margin-bottom: 15px; }
+        .btn-group { display: flex; gap: 10px; justify-content: center; }
+        button { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-play { background: #333; color: white; border: 1px solid #555; }
+        .btn-save { background: var(--primary); color: white; }
+        #status { margin-top: 15px; font-size: 14px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="text-align:center; color:var(--primary);">LINE APNG Generator</h2>
+    
+    <div class="upload-grid">
+        <div class="input-card">
+            <strong>Before (1.5s)</strong>
+            <input type="file" id="inputB" accept="image/png" style="width:100%; margin-top:10px;">
+            <div class="preview-thumb"><img id="thumbB"></div>
+        </div>
+        <div class="input-card">
+            <strong>After (2.4s)</strong>
+            <input type="file" id="inputA" accept="image/png" style="width:100%; margin-top:10px;">
+            <div class="preview-thumb"><img id="thumbA"></div>
+        </div>
+    </div>
+
+    <div class="config-card">
+        <strong>スワイプ方向:</strong>
+        <select id="direction">
+            <option value="horizontal">左から右へスワイプ</option>
+            <option value="vertical">下から上へスワイプ</option>
+        </select>
+    </div>
+
+    <div class="canvas-area">
+        <canvas id="mainCanvas" width="320" height="270"></canvas>
+        <div class="btn-group">
+            <button id="btnPlay" class="btn-play">プレビュー再生</button>
+            <button id="btnSave" class="btn-save">APNGを生成・保存</button>
+        </div>
+        <p id="status"></p>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const status = document.getElementById('status');
+const dirSelect = document.getElementById('direction');
+
+let imgA = null, imgB = null, isPlaying = false;
+
+async function load(file, tid) {
+    if(!file) return null;
+    const url = URL.createObjectURL(file);
+    document.getElementById(tid).src = url;
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+}
+
+document.getElementById('inputB').onchange = async (e) => imgB = await load(e.target.files[0], 'thumbB');
+document.getElementById('inputA').onchange = async (e) => imgA = await load(e.target.files[0], 'thumbA');
+
+function draw(mode, p = 0) {
+    ctx.clearRect(0, 0, 320, 270);
+    if(!imgA || !imgB) return;
+    
+    if(mode === 'A') {
+        ctx.drawImage(imgA, 0, 0, 320, 270);
+    } else if(mode === 'B') {
+        ctx.drawImage(imgB, 0, 0, 320, 270);
+    } else if(mode === 'S') {
+        const dir = dirSelect.value;
+        if(dir === 'horizontal') {
+            // Beforeを右へ追い出し、Afterを左から入れる（左から右へのスワイプ）
+            ctx.drawImage(imgB, 320 * p, 0, 320, 270);
+            ctx.drawImage(imgA, -320 + (320 * p), 0, 320, 270);
+        } else {
+            // Beforeを上へ追い出し、Afterを下から入れる（下から上へのスワイプ）
+            ctx.drawImage(imgB, 0, -270 * p, 320, 270);
+            ctx.drawImage(imgA, 0, 270 - (270 * p), 320, 270);
+        }
+    }
+}
+
+document.getElementById('btnPlay').onclick = async () => {
+    if(!imgA || !imgB || isPlaying) return;
+    isPlaying = true;
+    draw('A'); await new Promise(r => setTimeout(r, 10));
+    draw('B'); await new Promise(r => setTimeout(r, 1500));
+    const start = performance.now();
+    while(performance.now() - start < 100) {
+        draw('S', (performance.now() - start)/100);
+        await new Promise(r => requestAnimationFrame(r));
+    }
+    draw('A'); await new Promise(r => setTimeout(r, 2390));
+    isPlaying = false;
+};
+
+function finalizeApng(buffer) {
+    const view = new DataView(buffer);
+    let offset = 8;
+    const crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable[i] = c;
+    }
+    function calculateCrc(data) {
+        let crc = 0xFFFFFFFF;
+        for (let i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+        return crc ^ 0xFFFFFFFF;
+    }
+    while (offset < buffer.byteLength) {
+        const length = view.getUint32(offset);
+        const type = view.getUint32(offset + 4);
+        if (type === 0x6163544C) {
+            view.setUint32(offset + 12, 1);
+            const chunkData = new Uint8Array(buffer, offset + 4, length + 4);
+            view.setUint32(offset + 8 + length, calculateCrc(chunkData));
+            break;
+        }
+        offset += 12 + length;
+    }
+    return buffer;
+}
+
+document.getElementById('btnSave').onclick = async () => {
+    if(!imgA || !imgB) return;
+    status.innerText = "生成中...";
+    const frames = [], delays = [];
+
+    draw('A');
+    const afterData = ctx.getImageData(0,0,320,270).data.buffer;
+    draw('B');
+    const beforeData = ctx.getImageData(0,0,320,270).data.buffer;
+
+    frames.push(afterData); delays.push(10);
+    frames.push(beforeData); delays.push(1500);
+
+    for(let i=1; i<=5; i++) {
+        draw('S', i/5);
+        frames.push(ctx.getImageData(0,0,320,270).data.buffer);
+        delays.push(20);
+    }
+
+    frames.push(afterData); delays.push(2390);
+
+    try {
+        let apng = UPNG.encode(frames, 320, 270, 0, delays);
+        apng = finalizeApng(apng);
+        const size = apng.byteLength / 1024;
+        if(size > 320) {
+            status.style.color = "red";
+            status.innerText = `エラー: ${Math.round(size)}KB (超過)`;
+        } else {
+            const blob = new Blob([apng], {type: "image/png"});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `swipe_${dirSelect.value}_fixed.png`;
+            a.click();
+            status.style.color = "var(--primary)";
+            status.innerText = `成功！方向: ${dirSelect.options[dirSelect.selectedIndex].text}`;
+        }
+    } catch(e) {
+        status.innerText = "エラーが発生しました";
+    }
+};
+</script>
+</body>
+</html>
