@@ -2,58 +2,62 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>LINE APNG Final Fix</title>
+    <title>LINE APNG Studio - Swipe Logic</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 40px; margin: 0; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 640px; }
-        .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
-        .card { background: #fafafa; border: 1px solid #ddd; padding: 15px; border-radius: 8px; text-align: center; }
-        .preview-box { width: 100%; height: 120px; margin-top: 10px; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; background: #fff; }
-        .transparent-check { background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 10px 10px; }
-        canvas { border: 4px solid #333; border-radius: 4px; max-width: 100%; }
-        .controls { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
-        button { padding: 12px 30px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        #btnPlay { background: #007bff; color: white; }
-        #btnSave { background: #00b900; color: white; }
-        #status { margin-top: 20px; font-weight: bold; font-size: 14px; text-align: center; }
+        :root { --primary: #00b900; --bg: #1a1a1a; --card: #2d2d2d; --text: #fff; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { background: var(--card); padding: 25px; border-radius: 12px; width: 640px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .input-card { background: #333; padding: 15px; border-radius: 8px; border: 1px solid #444; text-align: center; }
+        .preview-thumb { width: 100%; height: 120px; background: #222; margin-top: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed #555; }
+        .preview-thumb img { max-width: 100%; max-height: 100%; }
+        .canvas-area { text-align: center; border-top: 1px solid #444; padding-top: 20px; }
+        canvas { border: 4px solid #000; background: #fff; border-radius: 4px; margin-bottom: 15px; cursor: pointer; }
+        .btn-group { display: flex; gap: 10px; justify-content: center; }
+        button { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-play { background: #333; color: white; border: 1px solid #555; }
+        .btn-save { background: var(--primary); color: white; }
+        button:hover { opacity: 0.8; }
+        button:disabled { background: #555 !important; cursor: not-allowed; }
+        #status { margin-top: 15px; font-size: 14px; color: #aaa; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="text-align:center; margin-top:0;">LINEスタンプSwipe生成 (最終対策版)</h2>
+    <h2 style="text-align:center; color:var(--primary);">LINE APNG Generator</h2>
     
-    <div class="upload-row">
-        <div class="card">
+    <div class="upload-grid">
+        <div class="input-card">
             <strong>Before (1.5s)</strong>
-            <input type="file" id="fB" accept="image/png" style="width:100%; margin:10px 0;">
-            <div class="preview-box transparent-check"><img id="tB" style="max-width:100%; max-height:100%;"></div>
+            <input type="file" id="inputB" accept="image/png" style="width:100%; margin-top:10px;">
+            <div class="preview-thumb"><img id="thumbB"></div>
         </div>
-        <div class="card">
+        <div class="input-card">
             <strong>After (2.45s)</strong>
-            <input type="file" id="fA" accept="image/png" style="width:100%; margin:10px 0;">
-            <div class="preview-box transparent-check"><img id="tA" style="max-width:100%; max-height:100%;"></div>
+            <input type="file" id="inputA" accept="image/png" style="width:100%; margin-top:10px;">
+            <div class="preview-thumb"><img id="thumbA"></div>
         </div>
     </div>
 
-    <div style="text-align:center;">
-        <canvas id="cvs" width="320" height="270" class="transparent-check"></canvas>
-        <div class="controls">
-            <button id="btnPlay">プレビュー再生</button>
-            <button id="btnSave">APNGを生成・保存</button>
+    <div class="canvas-area">
+        <canvas id="mainCanvas" width="320" height="270"></canvas>
+        <div class="btn-group">
+            <button id="btnPlay" class="btn-play">プレビュー再生</button>
+            <button id="btnSave" class="btn-save">APNGを生成・保存</button>
         </div>
-        <div id="status"></div>
+        <p id="status"></p>
     </div>
 </div>
 
 <script>
-const cvs = document.getElementById('cvs');
-const ctx = cvs.getContext('2d', { alpha: true });
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const status = document.getElementById('status');
 
-let imgA = null, imgB = null;
+let imgA = null, imgB = null, isPlaying = false;
 
 async function load(file, tid) {
     if(!file) return null;
@@ -65,75 +69,124 @@ async function load(file, tid) {
     return img;
 }
 
-document.getElementById('fB').onchange = async (e) => imgB = await load(e.target.files[0], 'tB');
-document.getElementById('fA').onchange = async (e) => imgA = await load(e.target.files[0], 'tA');
+document.getElementById('inputB').onchange = async (e) => imgB = await load(e.target.files[0], 'thumbB');
+document.getElementById('inputA').onchange = async (e) => imgA = await load(e.target.files[0], 'thumbA');
 
 function draw(mode, p = 0) {
-    ctx.clearRect(0,0,320,270);
+    ctx.clearRect(0, 0, 320, 270);
     if(!imgA || !imgB) return;
     if(mode === 'A') ctx.drawImage(imgA, 0, 0, 320, 270);
     else if(mode === 'B') ctx.drawImage(imgB, 0, 0, 320, 270);
     else if(mode === 'S') {
         ctx.drawImage(imgB, -320*p, 0, 320, 270);
-        ctx.drawImage(imgA, 320-320*p, 0, 320, 270);
+        ctx.drawImage(imgA, 320 - 320*p, 0, 320, 270);
     }
 }
 
+// プレビュー
 document.getElementById('btnPlay').onclick = async () => {
-    if(!imgA || !imgB) return;
+    if(!imgA || !imgB || isPlaying) return;
+    isPlaying = true;
     draw('A'); await new Promise(r => setTimeout(r, 50));
     draw('B'); await new Promise(r => setTimeout(r, 1500));
     const start = performance.now();
     while(performance.now() - start < 100) {
-        draw('S', (performance.now()-start)/100);
+        draw('S', (performance.now() - start)/100);
         await new Promise(r => requestAnimationFrame(r));
     }
     draw('A'); await new Promise(r => setTimeout(r, 2350));
+    isPlaying = false;
 };
 
+// 実績のあるバイナリ操作ロジック（CRC再計算付き）
+function finalizeApng(buffer) {
+    const view = new DataView(buffer);
+    let offset = 8;
+    
+    // CRCテーブルの準備
+    const crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable[i] = c;
+    }
+
+    function calculateCrc(data) {
+        let crc = 0xFFFFFFFF;
+        for (let i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+        return crc ^ 0xFFFFFFFF;
+    }
+
+    while (offset < buffer.byteLength) {
+        const length = view.getUint32(offset);
+        const type = view.getUint32(offset + 4);
+        
+        if (type === 0x6163544C) { // acTL チャンク
+            // ループ回数を1回に書き換え
+            view.setUint32(offset + 12, 1);
+            
+            // 書き換えたデータ部分のCRCを再計算して書き込む
+            const chunkData = new Uint8Array(buffer, offset + 4, length + 4);
+            const newCrc = calculateCrc(chunkData);
+            view.setUint32(offset + 8 + length, newCrc);
+            break;
+        }
+        offset += 12 + length;
+    }
+    return buffer;
+}
+
 document.getElementById('btnSave').onclick = async () => {
-    if(!imgA || !imgB) return;
+    if(!imgA || !imgB) return alert("画像を2枚選んでください");
     status.innerText = "生成中...";
     
     const frames = [], delays = [];
 
-    // 1. After画像をキャプチャ（これを1枚目と最後に使う）
+    // 1: Preview (After) 50ms
     draw('A');
-    const afterData = ctx.getImageData(0,0,320,270).data.buffer;
+    frames.push(ctx.getImageData(0,0,320,270).data.buffer);
+    delays.push(50);
 
-    // 2. Before画像をキャプチャ
+    // 2: Before 1500ms
     draw('B');
-    const beforeData = ctx.getImageData(0,0,320,270).data.buffer;
+    frames.push(ctx.getImageData(0,0,320,270).data.buffer);
+    delays.push(1500);
 
-    // --- フレーム構築 (厳密な4000ms) ---
-    frames.push(afterData); delays.push(50);   // 1: Preview(After)
-    frames.push(beforeData); delays.push(1500); // 2: Before
-    
-    for(let i=1; i<=5; i++){
+    // 3-7: Swipe 100ms
+    for(let i=1; i<=5; i++) {
         draw('S', i/5);
         frames.push(ctx.getImageData(0,0,320,270).data.buffer);
         delays.push(20);
     }
-    
-    frames.push(afterData); delays.push(2350); // 8: After (最終)
+
+    // 8: After 2350ms
+    draw('A');
+    frames.push(ctx.getImageData(0,0,320,270).data.buffer);
+    delays.push(2350);
 
     try {
-        // UPNG.encode: 1ループ, カラー数0(RGBA強制)
-        const apng = UPNG.encode(frames, 320, 270, 1, delays, 0);
-        const size = apng.byteLength / 1024;
+        // UPNGで基本構造を作成（ここでは一旦無限ループで書き出す）
+        let apng = UPNG.encode(frames, 320, 270, 0, delays);
         
+        // 実績のあるバイナリ直接操作でループ回数を1に書き換え
+        apng = finalizeApng(apng);
+
+        const size = apng.byteLength / 1024;
         if(size > 320) {
-            status.innerHTML = `<span style="color:red">失敗: ${Math.round(size)}KB (320KB以内にする必要があります)</span>`;
+            status.style.color = "red";
+            status.innerText = `失敗: ${Math.round(size)}KB (320KB制限を超過)`;
         } else {
-            const blob = new Blob([apng], {type:"image/png"});
-            const a = document.createElement("a");
+            const blob = new Blob([apng], {type: "image/png"});
+            const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = `line_stamp_final.png`;
+            a.download = `swipe_stamp_${Date.now()}.png`;
             a.click();
-            status.innerHTML = `<span style="color:green">成功！サイズ: ${Math.round(size)}KB</span>`;
+            status.style.color = "var(--primary)";
+            status.innerText = `成功！サイズ: ${Math.round(size)}KB / ループ回数: 1回`;
         }
     } catch(e) {
         status.innerText = "エラーが発生しました";
+        console.error(e);
     }
 };
 </script>
