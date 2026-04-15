@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>preBuild for hp2025 - Loop Count Fixed</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+    <style>
+        :root { --line-green: #00b900; --bg: #1a1a1a; --card: #2d2d2d; }
+        body { font-family: sans-serif; background: var(--bg); color: #fff; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: var(--card); padding: 25px; border-radius: 12px; width: 450px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
+        .input-area { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; text-align: left; }
+        canvas { border: 2px solid #000; background: #fff; max-width: 100%; height: auto; margin: 15px 0; border-radius: 4px; }
+        .btn-group { display: flex; gap: 10px; flex-direction: column; }
+        button { width: 100%; padding: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        #previewBtn { background: #444; color: white; border: 1px solid #555; }
+        #generateBtn { background: var(--line-green); color: white; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        #status { font-size: 13px; color: #999; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="color:var(--line-green); margin-top:0;">preBuild for hp2025</h2>
+    
+    <div class="input-area">
+        <input type="file" id="imageInput" accept="image/png" style="width:100%;">
+        <select id="jumpLevel" style="width:100%; margin-top:10px; padding:8px;">
+            <option value="low">低 (2回ジャンプ)</option>
+            <option value="mid" selected>中 (3回ジャンプ)</option>
+            <option value="high">高 (4回ジャンプ)</option>
+        </select>
+    </div>
+
+    <canvas id="mainCanvas"></canvas>
+
+    <div class="btn-group">
+        <button id="previewBtn" disabled>プレビュー再生</button>
+        <button id="generateBtn" disabled>LINE用APNGを保存</button>
+    </div>
+    
+    <p id="status">ファイルを選択してください</p>
+</div>
+
+<script>
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const status = document.getElementById('status');
+const imageInput = document.getElementById('imageInput');
+const previewBtn = document.getElementById('previewBtn');
+const generateBtn = document.getElementById('generateBtn');
+
+let userImg = null, W, H, isPlaying = false;
+const TOTAL_LIMIT = 20; 
+
+// 1.0s + (0.08s * 18) + 1.56s = 4.0s (規定以内)
+const delays = [1000, ...new Array(18).fill(80), 1560];
+
+const levels = {
+    low:  { hRatio: 0.3, cycles: 2, baseScale: 0.95, maxSquash: 0.20 },
+    mid:  { hRatio: 0.6, cycles: 3, baseScale: 0.80, maxSquash: 0.35 },
+    high: { hRatio: 1.0, cycles: 4, baseScale: 0.65, maxSquash: 0.55 }
+};
+
+imageInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const url = URL.createObjectURL(file);
+    userImg = new Image();
+    userImg.src = url;
+    await userImg.decode();
+    W = userImg.width; H = userImg.height;
+    canvas.width = W; canvas.height = H;
+    previewBtn.disabled = false;
+    generateBtn.disabled = false;
+    status.innerText = `準備完了: ${W}x${H}px`;
+    drawFrame(0);
+};
+
+function drawFrame(fIdx) {
+    ctx.clearRect(0, 0, W, H);
+    if(!userImg) return;
+    const config = levels[document.getElementById('jumpLevel').value];
+    
+    if(fIdx === 0 || fIdx === (TOTAL_LIMIT - 1)) {
+        ctx.drawImage(userImg, 0, 0, W, H);
+        return;
+    }
+
+    const animIdx = fIdx - 1;
+    const progress = (animIdx / (TOTAL_LIMIT - 2)) * config.cycles;
+    const yRel = Math.abs(Math.sin(progress * Math.PI)); 
+    const currentJump = (H - (H * config.baseScale)) * config.hRatio * yRel;
+    const t = Math.pow(yRel, 0.6);
+    let sY = (1.0 - config.maxSquash) + (config.baseScale - (1.0 - config.maxSquash)) * t;
+    let sX = (1.0 + config.maxSquash * 0.7) + (config.baseScale - (1.0 + config.maxSquash * 0.7)) * t;
+
+    ctx.save();
+    ctx.translate(W / 2, H - currentJump); 
+    ctx.drawImage(userImg, -(W*sX)/2, -(H*sY), W*sX, H*sY);
+    ctx.restore();
+}
+
+previewBtn.onclick = async () => {
+    if(isPlaying) return;
+    isPlaying = true;
+    for(let i = 0; i < TOTAL_LIMIT; i++) {
+        drawFrame(i);
+        await new Promise(r => setTimeout(r, delays[i]));
+    }
+    isPlaying = false;
+    drawFrame(0);
+};
+
+// 【重要】ループ回数をバイナリレベルで強制的に「1」にする修正
+function forceLoopCountOne(buffer) {
+    const view = new DataView(buffer);
+    let offset = 8; // PNG署名をスキップ
+    
+    // CRC計算用テーブル
+    const crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable[i] = c;
+    }
+    function calculateCrc(data) {
+        let crc = 0xFFFFFFFF;
+        for (let i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+        return crc ^ 0xFFFFFFFF;
+    }
+
+    while (offset < buffer.byteLength) {
+        const length = view.getUint32(offset);
+        const type = view.getUint32(offset + 4);
+        
+        if (type === 0x6163544C) { // "acTL" チャンクを発見
+            // acTLデータの構造:
+            // offset + 8: num_frames (4 bytes)
+            // offset + 12: num_plays (4 bytes) <- ここを 1 にしたい
+            
+            // UPNG.jsの出力仕様に合わせ、正確に12バイト先に num_plays(ループ回数) を書き込む
+            // view.setUint32(byteOffset, value, littleEndian)
+            view.setUint32(offset + 12, 1, false); 
+            
+            // データの変更に伴いCRCを再計算して書き換える
+            // チャンクタイプ(4枚) + データ(8枚) = 12枚分
+            const chunkTypeAndData = new Uint8Array(buffer, offset + 4, length + 4);
+            const newCrc = calculateCrc(chunkTypeAndData);
+            view.setUint32(offset + 8 + length, newCrc, false);
+            
+            console.log("Success: Loop count forced to 1.");
+            break;
+        }
+        offset += 12 + length;
+    }
+    return buffer;
+}
+
+generateBtn.onclick = async () => {
+    status.innerText = "生成中...";
+    const frames = [];
+    for(let i = 0; i < TOTAL_LIMIT; i++) {
+        drawFrame(i);
+        frames.push(ctx.getImageData(0, 0, W, H).data.buffer);
+    }
+    try {
+        // UPNG.encode は 0 (ロスレス) 指定が最も安全
+        let apng = UPNG.encode(frames, W, H, 0, delays);
+        apng = forceLoopCountOne(apng);
+        
+        const blob = new Blob([apng], { type: 'image/png' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `preBuild_L1_fixed.png`;
+        a.click();
+        status.innerHTML = `<span style="color:var(--line-green)">成功！ループ回数: 1回</span>`;
+    } catch (e) {
+        status.innerText = "エラー: " + e.message;
+    }
+};
+</script>
+</body>
+</html>
