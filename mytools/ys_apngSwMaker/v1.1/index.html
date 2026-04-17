@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - Compression Edition</title>
+    <title>LINE APNG Studio - Smart Checker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
@@ -14,34 +14,45 @@
         .preview-thumb { width: 100%; height: 120px; background: #222; margin-top: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed #555; }
         .preview-thumb img { max-width: 100%; max-height: 100%; }
         
+        .info-bar { background: #444; padding: 10px; border-radius: 6px; margin-bottom: 20px; display: flex; justify-content: space-around; font-size: 14px; border-left: 5px solid var(--primary); }
+        .type-badge { font-weight: bold; color: var(--primary); }
+
         .config-area { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .config-card { background: #3d3d3d; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #555; }
         select { padding: 8px; border-radius: 4px; border: none; background: #fff; font-weight: bold; width: 100%; margin-top: 5px; cursor: pointer; }
         
         .canvas-area { text-align: center; border-top: 1px solid #444; padding-top: 20px; }
-        canvas { border: 4px solid #000; background: #fff; border-radius: 4px; margin-bottom: 15px; }
+        canvas { border: 4px solid #000; background: #fff; border-radius: 4px; margin-bottom: 15px; max-width: 100%; }
         .btn-group { display: flex; gap: 10px; justify-content: center; }
         button { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-play { background: #333; color: white; border: 1px solid #555; }
         .btn-save { background: var(--primary); color: white; }
-        #status { margin-top: 15px; font-size: 14px; color: #aaa; }
+        #status { margin-top: 15px; font-size: 14px; font-weight: bold; }
+        .size-info { font-size: 12px; color: #aaa; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary);">preBuild for hp2025</h2>
+    <h2 style="text-align:center; color:var(--primary);">LINE APNG Generator</h2>
     
+    <div class="info-bar">
+        <div>判定結果: <span id="labelType" class="type-badge">未選択</span></div>
+        <div>容量制限: <span id="labelLimit" style="color:#fff;">--</span></div>
+    </div>
+
     <div class="upload-grid">
         <div class="input-card">
-            <strong>Before (1.5s)</strong>
+            <strong>Before (基準サイズ)</strong>
             <input type="file" id="inputB" accept="image/png" style="width:100%; margin-top:10px;">
             <div class="preview-thumb"><img id="thumbB"></div>
+            <div id="sizeB" class="size-info"></div>
         </div>
         <div class="input-card">
-            <strong>After (2.4s)</strong>
+            <strong>After</strong>
             <input type="file" id="inputA" accept="image/png" style="width:100%; margin-top:10px;">
             <div class="preview-thumb"><img id="thumbA"></div>
+            <div id="sizeA" class="size-info"></div>
         </div>
     </div>
 
@@ -58,11 +69,10 @@
         <div class="config-card">
             <strong>圧縮レベル (減色)</strong>
             <select id="compress">
-                <option value="0">0 (劣化なし・最大容量)</option>
-                <option value="20">20 (高品質)</option>
-                <option value="50">50 (標準圧縮)</option>
+                <option value="0">0 (劣化なし)</option>
+                <option value="50">50 (推奨)</option>
                 <option value="80">80 (強圧縮)</option>
-                <option value="100">100 (最大圧縮・最小容量)</option>
+                <option value="100">100 (最大)</option>
             </select>
         </div>
     </div>
@@ -81,46 +91,66 @@
 const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: true });
 const status = document.getElementById('status');
-const dirSelect = document.getElementById('moveDir');
-const compressSelect = document.getElementById('compress');
+const labelType = document.getElementById('labelType');
+const labelLimit = document.getElementById('labelLimit');
 
 let imgA = null, imgB = null, isPlaying = false;
+let canvasW = 320, canvasH = 270;
+let limitKB = 1024; // デフォルトはスタンプ(1MB)
 
-async function load(file, tid) {
+async function load(file, tid, sid, isBase = false) {
     if(!file) return null;
     const url = URL.createObjectURL(file);
     document.getElementById(tid).src = url;
     const img = new Image();
     img.src = url;
     await img.decode();
+    
+    document.getElementById(sid).innerText = `${img.width} x ${img.height} px`;
+    
+    if(isBase) {
+        canvasW = img.width;
+        canvasH = img.height;
+        canvas.width = canvasW;
+        canvas.height = canvasH;
+        
+        // 種別判別ロジック
+        if(canvasW <= 180 && canvasH <= 180 && canvasW === canvasH) {
+            labelType.innerText = "絵文字モード";
+            limitKB = 300;
+            labelLimit.innerText = "300KB";
+        } else {
+            labelType.innerText = "スタンプモード";
+            limitKB = 1024;
+            labelLimit.innerText = "1MB";
+        }
+    }
     return img;
 }
 
-document.getElementById('inputB').onchange = async (e) => imgB = await load(e.target.files[0], 'thumbB');
-document.getElementById('inputA').onchange = async (e) => imgA = await load(e.target.files[0], 'thumbA');
+document.getElementById('inputB').onchange = async (e) => imgB = await load(e.target.files[0], 'thumbB', 'sizeB', true);
+document.getElementById('inputA').onchange = async (e) => imgA = await load(e.target.files[0], 'thumbA', 'sizeA', false);
 
 function draw(mode, p = 0) {
-    ctx.clearRect(0, 0, 320, 270);
+    ctx.clearRect(0, 0, canvasW, canvasH);
     if(!imgA || !imgB) return;
+    const dir = document.getElementById('moveDir').value;
     
-    if(mode === 'A') {
-        ctx.drawImage(imgA, 0, 0, 320, 270);
-    } else if(mode === 'B') {
-        ctx.drawImage(imgB, 0, 0, 320, 270);
-    } else if(mode === 'S') {
-        const dir = dirSelect.value;
+    if(mode === 'A') { ctx.drawImage(imgA, 0, 0, canvasW, canvasH); }
+    else if(mode === 'B') { ctx.drawImage(imgB, 0, 0, canvasW, canvasH); }
+    else if(mode === 'S') {
         if(dir === 'right') {
-            ctx.drawImage(imgB, 320 * p, 0, 320, 270);
-            ctx.drawImage(imgA, -320 + (320 * p), 0, 320, 270);
+            ctx.drawImage(imgB, canvasW * p, 0, canvasW, canvasH);
+            ctx.drawImage(imgA, -canvasW + (canvasW * p), 0, canvasW, canvasH);
         } else if(dir === 'left') {
-            ctx.drawImage(imgB, -320 * p, 0, 320, 270);
-            ctx.drawImage(imgA, 320 - (320 * p), 0, 320, 270);
+            ctx.drawImage(imgB, -canvasW * p, 0, canvasW, canvasH);
+            ctx.drawImage(imgA, canvasW - (canvasW * p), 0, canvasW, canvasH);
         } else if(dir === 'down') {
-            ctx.drawImage(imgB, 0, 270 * p, 320, 270);
-            ctx.drawImage(imgA, 0, -270 + (270 * p), 320, 270);
+            ctx.drawImage(imgB, 0, canvasH * p, canvasW, canvasH);
+            ctx.drawImage(imgA, 0, -canvasH + (canvasH * p), canvasW, canvasH);
         } else if(dir === 'up') {
-            ctx.drawImage(imgB, 0, -270 * p, 320, 270);
-            ctx.drawImage(imgA, 0, 270 - (270 * p), 320, 270);
+            ctx.drawImage(imgB, 0, -canvasH * p, canvasW, canvasH);
+            ctx.drawImage(imgA, 0, canvasH - (canvasH * p), canvasW, canvasH);
         }
     }
 }
@@ -139,6 +169,7 @@ document.getElementById('btnPlay').onclick = async () => {
     isPlaying = false;
 };
 
+// チャンク処理などは前回同様
 function finalizeApng(buffer) {
     const view = new DataView(buffer);
     let offset = 8;
@@ -169,47 +200,43 @@ function finalizeApng(buffer) {
 
 document.getElementById('btnSave').onclick = async () => {
     if(!imgA || !imgB) return;
-    status.innerText = "エンコード中（これには時間がかかる場合があります）...";
+    status.innerText = "エンコード中...";
     status.style.color = "#aaa";
 
     const frames = [], delays = [];
-    draw('A'); const afterData = ctx.getImageData(0,0,320,270).data.buffer;
-    draw('B'); const beforeData = ctx.getImageData(0,0,320,270).data.buffer;
+    draw('A'); const afterData = ctx.getImageData(0,0,canvasW,canvasH).data.buffer;
+    draw('B'); const beforeData = ctx.getImageData(0,0,canvasW,canvasH).data.buffer;
 
     frames.push(afterData); delays.push(10);
     frames.push(beforeData); delays.push(1500);
     for(let i=1; i<=5; i++) {
         draw('S', i/5);
-        frames.push(ctx.getImageData(0,0,320,270).data.buffer);
+        frames.push(ctx.getImageData(0,0,canvasW,canvasH).data.buffer);
         delays.push(20);
     }
     frames.push(afterData); delays.push(2390);
 
-    // 非同期処理でUIフリーズを軽減
     setTimeout(() => {
         try {
-            const quality = parseInt(compressSelect.value);
-            // UPNG.encode(frames, width, height, colors, delays) 
-            // 第4引数が0の場合はロスレス、1以上で減色アルゴリズムが動作
-            let apng = UPNG.encode(frames, 320, 270, quality, delays);
+            const quality = parseInt(document.getElementById('compress').value);
+            let apng = UPNG.encode(frames, canvasW, canvasH, quality, delays);
             apng = finalizeApng(apng);
-
             const size = apng.byteLength / 1024;
-            if(size > 320) {
+
+            if(size > limitKB) {
                 status.style.color = "#ff4444";
-                status.innerText = `失敗: ${Math.round(size)}KB (320KBを超過しています。圧縮レベルを上げてください)`;
+                status.innerText = `容量超過: ${Math.round(size)}KB / 制限: ${limitKB}KB (圧縮レベルを上げてください)`;
             } else {
                 const blob = new Blob([apng], {type: "image/png"});
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `apng_q${quality}_${Date.now()}.png`;
+                a.download = `line_${canvasW}x${canvasH}_${Math.round(size)}kb.png`;
                 a.click();
                 status.style.color = "var(--primary)";
                 status.innerText = `成功！サイズ: ${Math.round(size)}KB`;
             }
         } catch(e) {
-            console.error(e);
-            status.innerText = "生成中にエラーが発生しました。";
+            status.innerText = "エラーが発生しました";
         }
     }, 100);
 };
