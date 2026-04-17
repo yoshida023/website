@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>LINE APNG Studio - All Directions Fixed</title>
+    <title>LINE APNG Studio - Natural Swipe</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
@@ -13,7 +13,7 @@
         .input-card { background: #333; padding: 15px; border-radius: 8px; border: 1px solid #444; text-align: center; }
         .preview-thumb { width: 100%; height: 120px; background: #222; margin-top: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed #555; }
         .preview-thumb img { max-width: 100%; max-height: 100%; }
-        .config-card { background: #3d3d3d; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .config-card { background: #3d3d3d; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 1px solid var(--primary); }
         select { padding: 8px; border-radius: 4px; border: none; background: #fff; font-weight: bold; margin-left: 10px; }
         .canvas-area { text-align: center; border-top: 1px solid #444; padding-top: 20px; }
         canvas { border: 4px solid #000; background: #fff; border-radius: 4px; margin-bottom: 15px; }
@@ -43,12 +43,12 @@
     </div>
 
     <div class="config-card">
-        <strong>スワイプ方向:</strong>
+        <strong>スワイプする方向:</strong>
         <select id="direction">
-            <option value="LtoR">左から右へスワイプ (→)</option>
-            <option value="RtoL">右から左へスワイプ (←)</option>
-            <option value="BtoT">下から上へスワイプ (↑)</option>
-            <option value="TtoB">上から下へスワイプ (↓)</option>
+            <option value="right">右へ (→) Beforeを右へ追い出す</option>
+            <option value="left">左へ (←) Beforeを左へ追い出す</option>
+            <option value="down">下へ (↓) Beforeを下へ追い出す</option>
+            <option value="up">上へ (↑) Beforeを上へ追い出す</option>
         </select>
     </div>
 
@@ -64,7 +64,7 @@
 
 <script>
 const canvas = document.getElementById('mainCanvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: true });
 const status = document.getElementById('status');
 const dirSelect = document.getElementById('direction');
 
@@ -83,6 +83,7 @@ async function load(file, tid) {
 document.getElementById('inputB').onchange = async (e) => imgB = await load(e.target.files[0], 'thumbB');
 document.getElementById('inputA').onchange = async (e) => imgA = await load(e.target.files[0], 'thumbA');
 
+// 直感的なスワイプロジック
 function draw(mode, p = 0) {
     ctx.clearRect(0, 0, 320, 270);
     if(!imgA || !imgB) return;
@@ -93,22 +94,22 @@ function draw(mode, p = 0) {
         ctx.drawImage(imgB, 0, 0, 320, 270);
     } else if(mode === 'S') {
         const dir = dirSelect.value;
-        if(dir === 'LtoR') {
-            // 左から右スワイプ：Beforeが右へ、Afterが左から
+        if(dir === 'right') {
+            // 右スワイプ: Beforeが右へ、Afterが左から
             ctx.drawImage(imgB, 320 * p, 0, 320, 270);
             ctx.drawImage(imgA, -320 + (320 * p), 0, 320, 270);
-        } else if(dir === 'RtoL') {
-            // 右から左スワイプ：Beforeが左へ、Afterが右から
+        } else if(dir === 'left') {
+            // 左スワイプ: Beforeが左へ、Afterが右から
             ctx.drawImage(imgB, -320 * p, 0, 320, 270);
             ctx.drawImage(imgA, 320 - (320 * p), 0, 320, 270);
-        } else if(dir === 'BtoT') {
-            // 下から上スワイプ：Beforeが上へ、Afterが下から
-            ctx.drawImage(imgB, 0, -270 * p, 320, 270);
-            ctx.drawImage(imgA, 0, 270 - (270 * p), 320, 270);
-        } else if(dir === 'TtoB') {
-            // 上から下スワイプ：Beforeが下へ、Afterが上から
+        } else if(dir === 'down') {
+            // 下スワイプ: Beforeが下へ、Afterが上から
             ctx.drawImage(imgB, 0, 270 * p, 320, 270);
             ctx.drawImage(imgA, 0, -270 + (270 * p), 320, 270);
+        } else if(dir === 'up') {
+            // 上スワイプ: Beforeが上へ、Afterが下から
+            ctx.drawImage(imgB, 0, -270 * p, 320, 270);
+            ctx.drawImage(imgA, 0, 270 - (270 * p), 320, 270);
         }
     }
 }
@@ -116,14 +117,14 @@ function draw(mode, p = 0) {
 document.getElementById('btnPlay').onclick = async () => {
     if(!imgA || !imgB || isPlaying) return;
     isPlaying = true;
-    draw('A'); await new Promise(r => setTimeout(r, 10));
-    draw('B'); await new Promise(r => setTimeout(r, 1500));
+    draw('A'); await new Promise(r => setTimeout(r, 10)); // Preview
+    draw('B'); await new Promise(r => setTimeout(r, 1500)); // Before
     const start = performance.now();
     while(performance.now() - start < 100) {
         draw('S', (performance.now() - start)/100);
         await new Promise(r => requestAnimationFrame(r));
     }
-    draw('A'); await new Promise(r => setTimeout(r, 2390));
+    draw('A'); await new Promise(r => setTimeout(r, 2390)); // After
     isPlaying = false;
 };
 
@@ -179,19 +180,13 @@ document.getElementById('btnSave').onclick = async () => {
     try {
         let apng = UPNG.encode(frames, 320, 270, 0, delays);
         apng = finalizeApng(apng);
-        const size = apng.byteLength / 1024;
-        if(size > 320) {
-            status.style.color = "red";
-            status.innerText = `エラー: ${Math.round(size)}KB (超過)`;
-        } else {
-            const blob = new Blob([apng], {type: "image/png"});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `swipe_${dirSelect.value}_fixed.png`;
-            a.click();
-            status.style.color = "var(--primary)";
-            status.innerText = `成功！方向: ${dirSelect.options[dirSelect.selectedIndex].text}`;
-        }
+        const blob = new Blob([apng], {type: "image/png"});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `swipe_${dirSelect.value}_final.png`;
+        a.click();
+        status.style.color = "var(--primary)";
+        status.innerText = "生成完了！";
     } catch(e) {
         status.innerText = "エラーが発生しました";
     }
