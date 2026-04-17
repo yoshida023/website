@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>LINE APNG Studio - All Directions</title>
+    <title>LINE APNG Studio - All Directions Fixed</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
@@ -27,7 +27,7 @@
 <body>
 
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary);">LINE APNG Generator (All-Dir)</h2>
+    <h2 style="text-align:center; color:var(--primary);">LINE APNG Generator</h2>
     
     <div class="upload-grid">
         <div class="input-card">
@@ -45,10 +45,10 @@
     <div class="config-card">
         <strong>スワイプ方向:</strong>
         <select id="direction">
-            <option value="LtoR">左から右へ (→)</option>
-            <option value="RtoL">右から左へ (←)</option>
-            <option value="BtoT">下から上へ (↑)</option>
-            <option value="TtoB">上から下へ (↓)</option>
+            <option value="LtoR">左から右へスワイプ (→)</option>
+            <option value="RtoL">右から左へスワイプ (←)</option>
+            <option value="BtoT">下から上へスワイプ (↑)</option>
+            <option value="TtoB">上から下へスワイプ (↓)</option>
         </select>
     </div>
 
@@ -94,19 +94,19 @@ function draw(mode, p = 0) {
     } else if(mode === 'S') {
         const dir = dirSelect.value;
         if(dir === 'LtoR') {
-            // 左から右スワイプ
+            // 左から右スワイプ：Beforeが右へ、Afterが左から
             ctx.drawImage(imgB, 320 * p, 0, 320, 270);
             ctx.drawImage(imgA, -320 + (320 * p), 0, 320, 270);
         } else if(dir === 'RtoL') {
-            // 右から左スワイプ
+            // 右から左スワイプ：Beforeが左へ、Afterが右から
             ctx.drawImage(imgB, -320 * p, 0, 320, 270);
             ctx.drawImage(imgA, 320 - (320 * p), 0, 320, 270);
         } else if(dir === 'BtoT') {
-            // 下から上スワイプ
+            // 下から上スワイプ：Beforeが上へ、Afterが下から
             ctx.drawImage(imgB, 0, -270 * p, 320, 270);
             ctx.drawImage(imgA, 0, 270 - (270 * p), 320, 270);
         } else if(dir === 'TtoB') {
-            // 上から下スワイプ
+            // 上から下スワイプ：Beforeが下へ、Afterが上から
             ctx.drawImage(imgB, 0, 270 * p, 320, 270);
             ctx.drawImage(imgA, 0, -270 + (270 * p), 320, 270);
         }
@@ -187,7 +187,7 @@ document.getElementById('btnSave').onclick = async () => {
             const blob = new Blob([apng], {type: "image/png"});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = `swipe_${dirSelect.value}_${Date.now()}.png`;
+            a.download = `swipe_${dirSelect.value}_fixed.png`;
             a.click();
             status.style.color = "var(--primary)";
             status.innerText = `成功！方向: ${dirSelect.options[dirSelect.selectedIndex].text}`;
