@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>LINE APNG Studio - Natural Swipe</title>
+    <title>preBuild for hp2025 - Directional Logic</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
@@ -14,7 +14,7 @@
         .preview-thumb { width: 100%; height: 120px; background: #222; margin-top: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px dashed #555; }
         .preview-thumb img { max-width: 100%; max-height: 100%; }
         .config-card { background: #3d3d3d; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 1px solid var(--primary); }
-        select { padding: 8px; border-radius: 4px; border: none; background: #fff; font-weight: bold; margin-left: 10px; }
+        select { padding: 8px; border-radius: 4px; border: none; background: #fff; font-weight: bold; margin-left: 10px; cursor: pointer; }
         .canvas-area { text-align: center; border-top: 1px solid #444; padding-top: 20px; }
         canvas { border: 4px solid #000; background: #fff; border-radius: 4px; margin-bottom: 15px; }
         .btn-group { display: flex; gap: 10px; justify-content: center; }
@@ -27,7 +27,7 @@
 <body>
 
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary);">LINE APNG Generator</h2>
+    <h2 style="text-align:center; color:var(--primary);">preBuild for hp2025</h2>
     
     <div class="upload-grid">
         <div class="input-card">
@@ -43,12 +43,12 @@
     </div>
 
     <div class="config-card">
-        <strong>スワイプする方向:</strong>
-        <select id="direction">
-            <option value="right">右へ (→) Beforeを右へ追い出す</option>
-            <option value="left">左へ (←) Beforeを左へ追い出す</option>
-            <option value="down">下へ (↓) Beforeを下へ追い出す</option>
-            <option value="up">上へ (↑) Beforeを上へ追い出す</option>
+        <strong>Before画像の抜けていく方向:</strong>
+        <select id="moveDir">
+            <option value="right">右へ抜ける (→)</option>
+            <option value="left">左へ抜ける (←)</option>
+            <option value="down">下へ抜ける (↓)</option>
+            <option value="up">上へ抜ける (↑)</option>
         </select>
     </div>
 
@@ -66,7 +66,7 @@
 const canvas = document.getElementById('mainCanvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: true });
 const status = document.getElementById('status');
-const dirSelect = document.getElementById('direction');
+const dirSelect = document.getElementById('moveDir');
 
 let imgA = null, imgB = null, isPlaying = false;
 
@@ -83,7 +83,7 @@ async function load(file, tid) {
 document.getElementById('inputB').onchange = async (e) => imgB = await load(e.target.files[0], 'thumbB');
 document.getElementById('inputA').onchange = async (e) => imgA = await load(e.target.files[0], 'thumbA');
 
-// 直感的なスワイプロジック
+// Beforeの移動方向に基づいた描画ロジック
 function draw(mode, p = 0) {
     ctx.clearRect(0, 0, 320, 270);
     if(!imgA || !imgB) return;
@@ -95,19 +95,19 @@ function draw(mode, p = 0) {
     } else if(mode === 'S') {
         const dir = dirSelect.value;
         if(dir === 'right') {
-            // 右スワイプ: Beforeが右へ、Afterが左から
+            // Beforeが右へ、Afterが左から入る
             ctx.drawImage(imgB, 320 * p, 0, 320, 270);
             ctx.drawImage(imgA, -320 + (320 * p), 0, 320, 270);
         } else if(dir === 'left') {
-            // 左スワイプ: Beforeが左へ、Afterが右から
+            // Beforeが左へ、Afterが右から入る
             ctx.drawImage(imgB, -320 * p, 0, 320, 270);
             ctx.drawImage(imgA, 320 - (320 * p), 0, 320, 270);
         } else if(dir === 'down') {
-            // 下スワイプ: Beforeが下へ、Afterが上から
+            // Beforeが下へ、Afterが上から入る
             ctx.drawImage(imgB, 0, 270 * p, 320, 270);
             ctx.drawImage(imgA, 0, -270 + (270 * p), 320, 270);
         } else if(dir === 'up') {
-            // 上スワイプ: Beforeが上へ、Afterが下から
+            // Beforeが上へ、Afterが下から入る
             ctx.drawImage(imgB, 0, -270 * p, 320, 270);
             ctx.drawImage(imgA, 0, 270 - (270 * p), 320, 270);
         }
@@ -183,7 +183,7 @@ document.getElementById('btnSave').onclick = async () => {
         const blob = new Blob([apng], {type: "image/png"});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `swipe_${dirSelect.value}_final.png`;
+        a.download = `move_${dirSelect.value}_final.png`;
         a.click();
         status.style.color = "var(--primary)";
         status.innerText = "生成完了！";
