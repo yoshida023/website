@@ -2,29 +2,23 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>preBuild for hp2025 - Profile Manager</title>
+    <title>preBuild for hp2025 - Loop 1 Strict Fix</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        :root { --line-green: #00b900; --bg: #1a1a1a; --card: #2d2d2d; --ui-accent: #444; }
+        :root { --line-green: #00b900; --bg: #1a1a1a; --card: #2d2d2d; }
         body { font-family: sans-serif; background: var(--bg); color: #fff; padding: 20px; display: flex; flex-direction: column; align-items: center; margin: 0; }
         .container { background: var(--card); padding: 25px; border-radius: 12px; width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; }
-        
-        /* プロファイルセクション */
         .profile-area { background: #222; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #444; display: flex; flex-direction: column; gap: 10px; }
         .profile-controls { display: flex; gap: 5px; }
         select, input[type="text"] { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #555; background: #fff; color: #000; font-weight: bold; }
-        
-        /* スライダーセクション */
         .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #333; padding: 15px; border-radius: 8px; text-align: left; margin-bottom: 20px; border: 1px solid #444; }
         label { display: block; font-size: 0.75rem; color: #aaa; margin-bottom: 5px; }
         input[type="range"] { width: 100%; cursor: pointer; }
         .val-disp { float: right; color: var(--line-green); font-weight: bold; }
-
         canvas { border: 2px solid #000; background: #fff; max-width: 100%; height: auto; margin: 15px 0; border-radius: 4px; }
         .btn-group { display: flex; gap: 10px; }
         button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .btn-sub { background: var(--ui-accent); color: white; font-size: 0.8em; }
         #previewBtn { background: #555; color: white; }
         #generateBtn { background: var(--line-green); color: white; font-size: 1.1em; }
         button:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -44,38 +38,26 @@
         <label style="text-align:left; color:var(--line-green);">● プロファイル管理</label>
         <div class="profile-controls">
             <select id="profileSelect"><option value="">-- ロード --</option></select>
-            <button id="deleteProfileBtn" class="btn-sub" style="flex:0; width:60px; background:#c0392b;">削除</button>
+            <button id="deleteProfileBtn" style="background:#c0392b; color:white; width:60px; border-radius:4px; border:none; cursor:pointer;">削除</button>
         </div>
         <div class="profile-controls">
             <input type="text" id="profileName" placeholder="名前を付けて保存...">
-            <button id="saveProfileBtn" class="btn-sub" style="flex:0; width:60px; background:var(--line-green);">保存</button>
+            <button id="saveProfileBtn" style="background:var(--line-green); color:white; width:60px; border-radius:4px; border:none; cursor:pointer;">保存</button>
         </div>
     </div>
 
     <div class="config-grid">
-        <div>
-            <label>地面位置 <span id="groundVal" class="val-disp">0</span></label>
-            <input type="range" id="pGround" min="0" max="100" value="0">
-        </div>
-        <div>
-            <label>ジャンプ高 <span id="heightVal" class="val-disp">60</span></label>
-            <input type="range" id="pHeight" min="10" max="100" value="60">
-        </div>
-        <div>
-            <label>ジャンプ回数 <span id="jumpVal" class="val-disp">3</span></label>
-            <input type="range" id="pJumps" min="1" max="5" value="3">
-        </div>
-        <div>
-            <label>潰れ具合 <span id="squashVal" class="val-disp">35</span></label>
-            <input type="range" id="pSquash" min="0" max="80" value="35">
-        </div>
+        <div><label>地面位置 <span id="groundVal" class="val-disp">0</span></label><input type="range" id="pGround" min="0" max="150" value="0"></div>
+        <div><label>ジャンプ高 <span id="heightVal" class="val-disp">60</span></label><input type="range" id="pHeight" min="10" max="100" value="60"></div>
+        <div><label>ジャンプ回数 <span id="jumpVal" class="val-disp">3</span></label><input type="range" id="pJumps" min="1" max="5" value="3"></div>
+        <div><label>潰れ具合 <span id="squashVal" class="val-disp">35</span></label><input type="range" id="pSquash" min="0" max="80" value="35"></div>
     </div>
 
     <canvas id="mainCanvas"></canvas>
 
     <div class="btn-group">
         <button id="previewBtn" disabled>プレビュー</button>
-        <button id="generateBtn" disabled>LINE用APNG保存</button>
+        <button id="generateBtn" disabled>LINE用APNG保存 (1回再生)</button>
     </div>
     
     <p id="status">画像を選択してください</p>
@@ -87,174 +69,134 @@ const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const status = document.getElementById('status');
 const imageInput = document.getElementById('imageInput');
 
-// スライダー・表示設定
-const params = {
-    pGround: 'groundVal',
-    pHeight: 'heightVal',
-    pJumps: 'jumpVal',
-    pSquash: 'squashVal'
-};
-
+const params = { pGround: 'groundVal', pHeight: 'heightVal', pJumps: 'jumpVal', pSquash: 'squashVal' };
 Object.keys(params).forEach(id => {
-    const el = document.getElementById(id);
-    el.oninput = () => {
-        document.getElementById(params[id]).innerText = el.value;
+    document.getElementById(id).oninput = () => {
+        document.getElementById(params[id]).innerText = document.getElementById(id).value;
         drawFrame(0);
     };
 });
 
 // プロファイル機能
 const profileSelect = document.getElementById('profileSelect');
-const profileNameInput = document.getElementById('profileName');
 const STORAGE_KEY = 'HP2025_PROFILES';
-
 function loadProfiles() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const profiles = stored ? JSON.parse(stored) : {};
+    const profiles = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     profileSelect.innerHTML = '<option value="">-- ロード --</option>';
     Object.keys(profiles).forEach(name => {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = name; opt.textContent = name;
         profileSelect.appendChild(opt);
     });
     return profiles;
 }
-
 document.getElementById('saveProfileBtn').onclick = () => {
-    const name = profileNameInput.value.trim();
-    if (!name) return alert('名前を入力してください');
-    const profiles = loadProfiles();
-    profiles[name] = {
-        g: document.getElementById('pGround').value,
-        h: document.getElementById('pHeight').value,
-        j: document.getElementById('pJumps').value,
-        s: document.getElementById('pSquash').value
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
-    profileNameInput.value = '';
-    loadProfiles();
-    profileSelect.value = name;
-    alert('保存しました');
-};
-
-profileSelect.onchange = () => {
-    const name = profileSelect.value;
+    const name = document.getElementById('profileName').value.trim();
     if (!name) return;
     const profiles = loadProfiles();
-    const p = profiles[name];
-    document.getElementById('pGround').value = p.g;
-    document.getElementById('pHeight').value = p.h;
-    document.getElementById('pJumps').value = p.j;
-    document.getElementById('pSquash').value = p.s;
+    profiles[name] = { g: document.getElementById('pGround').value, h: document.getElementById('pHeight').value, j: document.getElementById('pJumps').value, s: document.getElementById('pSquash').value };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+    document.getElementById('profileName').value = '';
+    loadProfiles(); profileSelect.value = name;
+};
+profileSelect.onchange = () => {
+    const p = loadProfiles()[profileSelect.value];
+    if (!p) return;
+    document.getElementById('pGround').value = p.g; document.getElementById('pHeight').value = p.h;
+    document.getElementById('pJumps').value = p.j; document.getElementById('pSquash').value = p.s;
     Object.keys(params).forEach(id => document.getElementById(params[id]).innerText = document.getElementById(id).value);
     drawFrame(0);
 };
 
-document.getElementById('deleteProfileBtn').onclick = () => {
-    const name = profileSelect.value;
-    if (!name || !confirm('削除しますか？')) return;
-    const profiles = loadProfiles();
-    delete profiles[name];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
-    loadProfiles();
-    drawFrame(0);
-};
-
-// 描画・APNGロジック
+// 描画ロジック
 let userImg = null, W, H, isPlaying = false;
 const TOTAL_LIMIT = 20; 
 const delays = [1000, ...new Array(18).fill(80), 1560];
 
 imageInput.onchange = async (e) => {
-    const file = e.target.files[0];
-    if(!file) return;
+    const file = e.target.files[0]; if(!file) return;
     const url = URL.createObjectURL(file);
-    userImg = new Image();
-    userImg.src = url;
+    userImg = new Image(); userImg.src = url;
     await userImg.decode();
     W = userImg.width; H = userImg.height;
     canvas.width = W; canvas.height = H;
     document.getElementById('previewBtn').disabled = false;
     document.getElementById('generateBtn').disabled = false;
-    status.innerText = `準備完了: ${W}x${H}px`;
     drawFrame(0);
 };
 
 function drawFrame(fIdx) {
-    ctx.clearRect(0, 0, W, H);
-    if(!userImg) return;
-
-    const groundOffset = parseInt(document.getElementById('pGround').value);
-    const jumpHFactor = parseInt(document.getElementById('pHeight').value) / 100;
-    const jumpCount = parseInt(document.getElementById('pJumps').value);
-    const maxSquash = parseInt(document.getElementById('pSquash').value) / 100;
-
-    if(fIdx === 0 || fIdx === (TOTAL_LIMIT - 1)) {
-        ctx.drawImage(userImg, 0, 0, W, H);
-        return;
-    }
-
-    const animIdx = fIdx - 1;
-    const progress = (animIdx / (TOTAL_LIMIT - 2)) * jumpCount;
+    ctx.clearRect(0, 0, W, H); if(!userImg) return;
+    const ground = parseInt(document.getElementById('pGround').value);
+    const jumpH = parseInt(document.getElementById('pHeight').value) / 100;
+    const jumpC = parseInt(document.getElementById('pJumps').value);
+    const sqsh = parseInt(document.getElementById('pSquash').value) / 100;
+    if(fIdx === 0 || fIdx === (TOTAL_LIMIT - 1)) { ctx.drawImage(userImg, 0, 0, W, H); return; }
+    const progress = ((fIdx - 1) / (TOTAL_LIMIT - 2)) * jumpC;
     const yRel = Math.abs(Math.sin(progress * Math.PI)); 
-    
-    const baseScale = 0.8; 
-    const groundY = H - groundOffset;
-    const objH = H * baseScale;
-    const currentJump = (groundY - objH) * jumpHFactor * yRel;
-
+    const groundY = H - ground;
+    const objH = H * 0.8;
+    const jumpDist = (groundY - objH) * jumpH * yRel;
     const t = Math.pow(yRel, 0.6);
-    let sY = (1.0 - maxSquash) + (baseScale - (1.0 - maxSquash)) * t;
-    let sX = (1.0 + maxSquash * 0.7) + (baseScale - (1.0 + maxSquash * 0.7)) * t;
-
-    ctx.save();
-    ctx.translate(W / 2, groundY - currentJump); 
-    ctx.drawImage(userImg, -(W*sX)/2, -(H*sY), W*sX, H*sY);
-    ctx.restore();
+    let sY = (1.0 - sqsh) + (0.8 - (1.0 - sqsh)) * t;
+    let sX = (1.0 + sqsh * 0.7) + (0.8 - (1.0 + sqsh * 0.7)) * t;
+    ctx.save(); ctx.translate(W / 2, groundY - jumpDist); 
+    ctx.drawImage(userImg, -(W*sX)/2, -(H*sY), W*sX, H*sY); ctx.restore();
 }
 
+// プレビュー再生
 document.getElementById('previewBtn').onclick = async () => {
-    if(isPlaying) return;
-    isPlaying = true;
+    if(isPlaying) return; isPlaying = true;
     for(let i = 0; i < TOTAL_LIMIT; i++) {
-        drawFrame(i);
-        await new Promise(r => setTimeout(r, delays[i]));
+        drawFrame(i); await new Promise(r => setTimeout(r, delays[i]));
     }
-    isPlaying = false;
-    drawFrame(0);
+    isPlaying = false; drawFrame(0);
 };
 
+// 【最強版】ループ回数を1回に固定するバイナリ修正
 function forceLoopCountOne(buffer) {
     const view = new DataView(buffer);
-    let offset = 8;
+    const bytes = new Uint8Array(buffer);
+    
+    // acTL チャンクを検索 (ASCII: 'a','c','T','L')
+    let acTLPos = -1;
+    for (let i = 0; i < bytes.length - 8; i++) {
+        if (bytes[i] === 0x61 && bytes[i+1] === 0x63 && bytes[i+2] === 0x54 && bytes[i+3] === 0x4C) {
+            acTLPos = i;
+            break;
+        }
+    }
+
+    if (acTLPos === -1) return buffer; // 見つからない場合はそのまま返す
+
+    // acTLチャンクの構造: 
+    // [Chunk Length(4)][Chunk Type(4)][num_frames(4)][num_plays(4)]
+    // acTLPosはTypeの開始位置なので、その4バイト後ろがnum_frames、8バイト後ろがnum_plays
+    
+    // ループ回数(num_plays)を 1 に固定
+    view.setUint32(acTLPos + 8, 1, false); 
+
+    // CRCを再計算
     const crcTable = new Uint32Array(256);
     for (let i = 0; i < 256; i++) {
         let c = i;
         for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
         crcTable[i] = c;
     }
-    function calculateCrc(data) {
-        let crc = 0xFFFFFFFF;
-        for (let i = 0; i < data.length; i++) crc = crcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
-        return crc ^ 0xFFFFFFFF;
+    
+    // CRC対象は Chunk Type から データの終わりまで
+    const length = view.getUint32(acTLPos - 4); // Chunk Typeの直前4バイトがデータ長
+    let crc = 0xFFFFFFFF;
+    for (let i = acTLPos; i < acTLPos + 4 + length; i++) {
+        crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
     }
-    while (offset < buffer.byteLength) {
-        const length = view.getUint32(offset);
-        const type = view.getUint32(offset + 4);
-        if (type === 0x6163544C) { 
-            view.setUint32(offset + 12, TOTAL_LIMIT); 
-            view.setUint32(offset + 16, 1, false); 
-            const chunkData = new Uint8Array(buffer, offset + 4, length + 4);
-            view.setUint32(offset + 8 + length, calculateCrc(chunkData), false);
-            break;
-        }
-        offset += 12 + length;
-    }
+    view.setUint32(acTLPos + 4 + length, crc ^ 0xFFFFFFFF, false);
+
+    console.log("Loop Count set to 1 and CRC fixed.");
     return buffer;
 }
 
-document.getElementById('generateBtn').onclick = async () => {
+generateBtn.onclick = async () => {
     status.innerText = "生成中...";
     const frames = [];
     for(let i = 0; i < TOTAL_LIMIT; i++) {
@@ -267,13 +209,12 @@ document.getElementById('generateBtn').onclick = async () => {
         const blob = new Blob([apng], { type: 'image/png' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `stamp_L1_profile.png`;
+        a.download = `line_stamp_L1_Final.png`;
         a.click();
-        status.innerHTML = `<span style="color:var(--line-green)">成功！</span>`;
+        status.innerHTML = `<span style="color:var(--line-green)">保存完了！</span>`;
     } catch (e) { status.innerText = "エラー: " + e.message; }
 };
 
-// 初期ロード
 loadProfiles();
 </script>
 </body>
