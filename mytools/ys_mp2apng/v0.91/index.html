@@ -3,32 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>preBuild for hp2025 - Full Chroma Control</title>
+    <title>preBuild for hp2025 - Strict Duration</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; text-align: center; background: #f0f2f5; padding: 15px; color: #333; margin: 0; }
-        .container { max-width: 100%; margin: 0 auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); box-sizing: border-box; }
-        h1 { font-size: 1.2rem; margin: 0 0 15px 0; color: #00b900; }
-        .config { background: #f8f9fa; padding: 15px; border-radius: 12px; margin: 15px 0; text-align: left; border: 1px solid #eee; }
-        label { font-size: 0.75rem; font-weight: bold; display: block; margin-top: 10px; color: #666; }
-        select, button, input[type="text"] { padding: 12px; margin: 5px 0; width: 100%; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; }
-        input[type="range"] { width: 100%; margin: 12px 0; }
-        button { background: #00b900; color: white; border: none; font-weight: bold; cursor: pointer; height: 54px; }
+        body { font-family: -apple-system, sans-serif; text-align: center; background: #f0f2f5; padding: 15px; margin: 0; }
+        .container { max-width: 100%; margin: 0 auto; background: white; padding: 20px; border-radius: 20px; box-sizing: border-box; }
+        h1 { font-size: 1.1rem; color: #00b900; margin-bottom: 20px; }
+        .config { background: #f8f9fa; padding: 15px; border-radius: 12px; margin: 15px 0; text-align: left; font-size: 14px; }
+        label { font-weight: bold; display: block; margin-top: 10px; color: #666; }
+        select, button, input[type="text"] { padding: 12px; margin: 5px 0; width: 100%; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
+        input[type="range"] { width: 100%; margin: 10px 0; }
+        button { background: #00b900; color: white; border: none; font-weight: bold; height: 54px; cursor: pointer; }
         button:disabled { background: #ccc; }
-        #videoPreviewContainer { background: #000; border-radius: 10px; overflow: hidden; line-height: 0; min-height: 180px; display: flex; align-items: center; justify-content: center; }
-        video { width: 100%; height: auto; display: block; }
-        .slider-box { background: #fffde7; padding: 12px; border-radius: 10px; border: 1px solid #fff59d; margin: 10px 0; text-align: left; }
-        .chroma-controls { display: flex; gap: 10px; margin-top: 5px; }
-        .chroma-controls > div { flex: 1; }
-        #resultImgContainer { margin-top: 20px; background-image: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%); background-size: 16px 16px; background-color: #eee; border-radius: 12px; min-height: 150px; display: flex; align-items: center; justify-content: center; overflow-x: auto; }
+        #videoPreviewContainer { background: #000; border-radius: 10px; overflow: hidden; min-height: 150px; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: auto; }
+        .notice { font-size: 11px; color: #d32f2f; margin-top: 5px; line-height: 1.4; }
+        #resultImgContainer { margin-top: 20px; background: #eee; border-radius: 12px; min-height: 100px; display: flex; align-items: center; justify-content: center; }
         img { max-width: 100%; height: auto; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>YS mp2apng v0.91</h1>
+    <h1>preBuild for hp2025</h1>
     
     <input type="file" id="videoInput" accept="video/*">
     
@@ -36,37 +34,38 @@
         <video id="hiddenVideo" muted playsinline preload="auto"></video>
     </div>
 
-    <div class="slider-box">
+    <div class="config">
         <label>📸 表紙シーン選択: <span id="startTimeDisplay">0.00</span>s</label>
         <input type="range" id="startTimeSlider" min="0" max="1" step="0.01" value="0">
-    </div>
 
-    <div class="config">
-        <label>透過色 (動画をタップして抽出)</label>
+        <label>透過色 (タップして抽出)</label>
         <div style="display:flex; gap:10px; align-items: center;">
             <div id="colorPreview" style="width:44px; height:44px; background:#fff; border:1px solid #ccc; border-radius:8px; flex-shrink: 0;"></div>
-            <input type="text" id="chromaHex" value="#FFFFFF">
+            <input type="text" id="chromaHex" value="#FFFFFF" style="flex-grow:1;">
         </div>
 
-        <div class="chroma-controls">
-            <div>
-                <label>許容範囲 (Range)</label>
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;">
+                <label>許容範囲</label>
                 <input type="range" id="rangeSlider" min="0" max="150" value="30">
             </div>
-            <div>
-                <label>滑らかさ (Smooth)</label>
+            <div style="flex:1;">
+                <label>滑らかさ</label>
                 <input type="range" id="smoothSlider" min="1" max="50" value="5">
             </div>
         </div>
 
         <label>ループ回数</label>
         <select id="loopCount">
-            <option value="1">1回</option><option value="2">2回</option>
-            <option value="3">3回</option><option value="4">4回</option>
+            <option value="1">1回 (推奨)</option>
+            <option value="2">2回</option>
+            <option value="3">3回</option>
+            <option value="4">4回</option>
         </select>
+        <p class="notice">※2回×2秒＝4秒など、総再生時間が4秒を超えるとLINEでエラーになります。その場合は1回を選択してください。</p>
     </div>
 
-    <button id="convertBtn" disabled>等倍APNGを作成</button>
+    <button id="convertBtn" disabled>APNGを作成 (4秒制限遵守)</button>
     <div id="statusText" style="margin-top:10px; font-size:12px; color:#666;">動画を選択してください</div>
 
     <div id="previewContainer" style="display:none;">
@@ -89,10 +88,7 @@
     const startTimeDisplay = document.getElementById('startTimeDisplay');
     const chromaHex = document.getElementById('chromaHex');
     const colorPreview = document.getElementById('colorPreview');
-    const rangeSlider = document.getElementById('rangeSlider');
-    const smoothSlider = document.getElementById('smoothSlider');
 
-    // 動画読み込み・プレビュー修正
     videoInput.addEventListener('change', async (e) => {
         if (e.target.files[0]) {
             video.src = URL.createObjectURL(e.target.files[0]);
@@ -102,7 +98,7 @@
                 startTimeSlider.max = video.duration;
                 startTimeSlider.value = 0;
                 convertBtn.disabled = false;
-                statusText.innerText = `準備完了: ${video.videoWidth}x${video.videoHeight}`;
+                statusText.innerText = `動画: ${video.videoWidth}x${video.videoHeight} (${video.duration.toFixed(2)}秒)`;
             };
         }
     });
@@ -113,7 +109,6 @@
         video.currentTime = val;
     });
 
-    // カラーピッカー
     const pickColor = (e) => {
         const rect = video.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -129,17 +124,13 @@
     video.addEventListener('click', pickColor);
     video.addEventListener('touchstart', pickColor);
 
-    // 高精度クロマキーロジック
     function applyAdvancedChromakey(imgData, hex, range, smooth) {
         const r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16);
         const d = imgData.data;
         for (let i = 0; i < d.length; i += 4) {
-            const distance = Math.sqrt(Math.pow(d[i]-r,2) + Math.pow(d[i+1]-g,2) + Math.pow(d[i+2]-b,2));
-            if (distance < range) {
-                d[i+3] = 0;
-            } else if (distance < range + smooth) {
-                d[i+3] = ((distance - range) / smooth) * 255;
-            }
+            const dist = Math.sqrt(Math.pow(d[i]-r,2) + Math.pow(d[i+1]-g,2) + Math.pow(d[i+2]-b,2));
+            if (dist < range) { d[i+3] = 0; }
+            else if (dist < range + smooth) { d[i+3] = ((dist - range) / smooth) * 255; }
         }
         return imgData;
     }
@@ -155,27 +146,38 @@
         const w = video.videoWidth; const h = video.videoHeight;
         canvas.width = w; canvas.height = h;
         const loopVal = parseInt(document.getElementById('loopCount').value);
-        const targetDur = Math.max(1, Math.min(4, Math.round(video.duration)));
+        
+        // 【重要】整数秒をターゲットにするが、4秒を絶対に超えないようにガード
+        const rawDur = video.duration;
+        let targetDur = Math.round(rawDur); // 1.5s -> 2s, 2.4s -> 2s
+        if (targetDur * loopVal > 4) {
+            targetDur = Math.floor(4 / loopVal); // 超える場合は強制切り捨て
+        }
+        targetDur = Math.max(1, targetDur); // 最低1秒
+
         const finalFrames = []; const finalDelays = [];
-        const totalMs = (targetDur * 1000) / loopVal;
-        const range = parseFloat(rangeSlider.value);
-        const smooth = parseFloat(smoothSlider.value);
+        const totalMsPerLoop = (targetDur * 1000) / loopVal;
+        const range = parseFloat(document.getElementById('rangeSlider').value);
+        const smooth = parseFloat(document.getElementById('smoothSlider').value);
+        const hex = chromaHex.value;
 
         try {
             // 1. 表紙
             video.currentTime = parseFloat(startTimeSlider.value);
             await new Promise(r => video.onseeked = r);
             ctx.clearRect(0,0,w,h); ctx.drawImage(video,0,0,w,h);
-            finalFrames.push(applyAdvancedChromakey(ctx.getImageData(0,0,w,h), chromaHex.value, range, smooth).data.buffer);
-            finalDelays.push(10);
+            finalFrames.push(applyAdvancedChromakey(ctx.getImageData(0,0,w,h), hex, range, smooth).data.buffer);
+            finalDelays.push(10); // 0.01s
 
-            // 2. 本編(19枚)
+            // 2. 本編
+            const remainingMs = totalMsPerLoop - 10;
+            const delay = Math.floor(remainingMs / 19);
             for (let i = 0; i < 19; i++) {
-                video.currentTime = (i / 18) * Math.min(video.duration, 4);
+                video.currentTime = (i / 18) * Math.min(rawDur, 4);
                 await new Promise(r => video.onseeked = r);
                 ctx.clearRect(0,0,w,h); ctx.drawImage(video,0,0,w,h);
-                finalFrames.push(applyAdvancedChromakey(ctx.getImageData(0,0,w,h), chromaHex.value, range, smooth).data.buffer);
-                finalDelays.push(Math.floor((totalMs - 10) / 19));
+                finalFrames.push(applyAdvancedChromakey(ctx.getImageData(0,0,w,h), hex, range, smooth).data.buffer);
+                finalDelays.push(i === 18 ? (remainingMs - (delay * 18)) : delay);
             }
 
             let ab = UPNG.encode(finalFrames, w, h, 256, finalDelays);
@@ -183,9 +185,9 @@
             const url = URL.createObjectURL(new Blob([ab], {type: 'image/png'}));
             document.getElementById('resultImgContainer').innerHTML = `<img src="${url}">`;
             document.getElementById('previewContainer').style.display = 'block';
-            statusText.innerText = "完了！画像を長押し保存";
+            statusText.innerText = `完了: ${targetDur}秒 × ${loopVal}回 (総${targetDur * loopVal}秒)`;
         } catch (e) {
-            alert("エラーが発生しました。動画を短くしてください。");
+            alert("エラー: " + e.message);
         }
         convertBtn.disabled = false;
     });
