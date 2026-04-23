@@ -21,12 +21,10 @@
 
 <div class="container">
     <h1>preBuild for hp2025</h1>
-    
     <div class="item">
         <label>1. 動画を選択 (MP4)</label>
         <input type="file" id="videoInput" accept="video/mp4,video/quicktime">
     </div>
-
     <div class="item">
         <label>2. 分割秒数</label>
         <select id="splitSec">
@@ -36,20 +34,17 @@
             <option value="4">4秒</option>
         </select>
     </div>
-
     <div class="item">
         <label>3. ファイル名 桁数</label>
         <select id="digit">
-            <option value="2">2桁 (01, 02...)</option>
-            <option value="3">3桁 (001, 002...)</option>
+            <option value="2">2桁</option>
+            <option value="3">3桁</option>
         </select>
     </div>
-
     <div class="item">
         <label>4. 開始数値</label>
         <input type="number" id="startNum" value="1" min="0">
     </div>
-
     <button id="startBtn">分割・圧縮を開始</button>
     <div id="status">待機中</div>
 </div>
@@ -69,7 +64,7 @@
         if (!file) return alert('動画を選択してください');
 
         startBtn.disabled = true;
-        status.innerText = "準備中...";
+        status.innerText = "動画を読み込み中...";
 
         const video = document.createElement('video');
         video.playsInline = true;
@@ -77,7 +72,7 @@
         video.src = URL.createObjectURL(file);
 
         try {
-            await video.play(); // iPhoneのデコーダ活性化
+            await video.play(); 
             video.pause();
 
             const width = video.videoWidth;
@@ -95,21 +90,21 @@
             while (currentStartTime < duration) {
                 status.innerText = `分割中: ${fileCount + 1}個目...`;
                 
-                const segmentDuration = Math.min(interval, duration - currentStartTime);
                 const muxer = new Muxer({
                     target: new ArrayBufferTarget(),
                     video: { codec: 'avc', width: vWidth, height: vHeight },
                     fastStart: 'in-memory'
                 });
 
-                let videoTrackInitReceived = false;
-
+                // --- 1. エンコーダーの作成 ---
+                let isConfigured = false;
                 const encoder = new VideoEncoder({
                     output: (chunk, meta) => {
-                        // iPhone対策: metaが存在し、かつtrack情報が含まれている場合のみ追加
+                        // iPhone対策: metaが完全に揃っていることを確認してからMuxerへ
                         if (meta && meta.decoderConfig) {
-                            videoTrackInitReceived = true;
+                            isConfigured = true;
                         }
+                        // 既に構成済みか、metaが含まれる最初のチャンクのみ通す
                         muxer.addVideoChunk(chunk, meta);
                     },
                     error: (e) => { throw e; }
@@ -121,28 +116,30 @@
                     height: vHeight,
                     bitrate: 1_200_000,
                     framerate: fps,
-                    latencyMode: 'realtime' // iPhoneでのメタデータ生成を早める
+                    latencyMode: 'realtime' 
                 });
 
-                // --- 1フレーム目だけ先に処理してメタデータを確定させる ---
+                const segmentDuration = Math.min(interval, duration - currentStartTime);
+
+                // --- 2. 最初のフレーム（キーフレーム）を投入し、メタデータ確定を待つ ---
                 video.currentTime = currentStartTime;
                 await new Promise(r => video.onseeked = r);
+                
                 const firstFrame = new VideoFrame(video, { timestamp: 0 });
                 encoder.encode(firstFrame, { keyFrame: true });
                 firstFrame.close();
-                
-                // メタデータ(track.info)が確定するまで最大1秒待機
-                let waitCount = 0;
-                while (!videoTrackInitReceived && waitCount < 20) {
+
+                // iPhoneのメタデータ生成待ち (最大2秒)
+                for (let i = 0; i < 40 && !isConfigured; i++) {
                     await new Promise(r => setTimeout(r, 50));
-                    waitCount++;
                 }
 
-                // 残りのフレームを処理
+                // --- 3. 残りのフレームを処理 ---
                 for (let t = (1/fps); t < segmentDuration; t += (1/fps)) {
                     if (currentStartTime + t >= duration) break;
                     video.currentTime = currentStartTime + t;
                     await new Promise(r => video.onseeked = r);
+                    
                     const frame = new VideoFrame(video, { timestamp: Math.round(t * 1_000_000) });
                     encoder.encode(frame);
                     frame.close();
@@ -163,18 +160,19 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = "split_videos.zip";
+            a.download = "preBuild_split_videos.zip";
             a.click();
+            status.style.color = "green";
             status.innerText = "完了しました";
 
         } catch (e) {
             console.error(e);
+            status.style.color = "red";
             status.innerText = "エラー: " + e.message;
         } finally {
             startBtn.disabled = false;
         }
     });
 </script>
-
 </body>
 </html>
