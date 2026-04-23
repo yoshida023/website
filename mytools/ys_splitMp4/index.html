@@ -3,21 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>preBuild for hp2025 - Video Splitter</title>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <title>preBuild for hp2025</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #f0f2f5; color: #1c1e21; }
-        .container { max-width: 450px; margin: auto; background: white; padding: 25px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
-        h1 { font-size: 1.4rem; text-align: center; color: #007aff; margin-bottom: 20px; }
-        .item { margin-bottom: 18px; }
-        label { display: block; font-size: 0.85rem; margin-bottom: 6px; font-weight: 600; color: #4b4b4b; }
-        select, input, button { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; font-size: 1rem; }
-        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.2s; }
-        button:active { background: #0056b3; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        #status { margin-top: 20px; font-size: 0.85rem; color: #666; text-align: center; line-height: 1.4; }
-        progress { width: 100%; height: 10px; margin-top: 10px; }
+        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f0f2f5; color: #333; }
+        .container { max-width: 450px; margin: auto; background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.2rem; text-align: center; color: #007aff; margin-bottom: 20px; }
+        .item { margin-bottom: 15px; }
+        label { display: block; font-size: 0.85rem; margin-bottom: 5px; font-weight: bold; }
+        select, input, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 1rem; }
+        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 15px; font-size: 0.85rem; color: #d00; text-align: center; white-space: pre-wrap; }
+        video { display: none; } /* プレビュー不要な場合は非表示 */
     </style>
 </head>
 <body>
@@ -26,8 +24,8 @@
     <h1>preBuild for hp2025</h1>
     
     <div class="item">
-        <label>1. 動画ファイルを選択 (MP4)</label>
-        <input type="file" id="videoInput" accept="video/mp4">
+        <label>1. 動画を選択</label>
+        <input type="file" id="videoInput" accept="video/mp4,video/quicktime">
     </div>
 
     <div class="item">
@@ -54,91 +52,97 @@
     </div>
 
     <button id="startBtn">分割・圧縮を開始</button>
-    <div id="status">動画を選択してボタンを押してください</div>
+    <div id="status"></div>
+    <video id="v" playsinline muted></video>
 </div>
 
 <script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    // SharedArrayBufferエラーを回避するため、あえて古いバージョンのロード方式を指定
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-    });
-
     const videoInput = document.getElementById('videoInput');
     const splitSec = document.getElementById('splitSec');
     const digit = document.getElementById('digit');
     const startNum = document.getElementById('startNum');
     const startBtn = document.getElementById('startBtn');
     const status = document.getElementById('status');
+    const video = document.getElementById('v');
 
     startBtn.addEventListener('click', async () => {
         const file = videoInput.files[0];
-        if (!file) return alert('動画ファイルを選択してください');
+        if (!file) return alert('動画を選択してください');
 
         startBtn.disabled = true;
-        status.innerHTML = '処理中...<br>初回はライブラリの読み込みに時間がかかります。';
+        status.style.color = "#666";
+        status.innerText = "処理中... (動画の長さと同じ時間がかかります)";
+
+        const zip = new JSZip();
+        const duration = await getDuration(file);
+        const interval = parseInt(splitSec.value);
+        const videoUrl = URL.createObjectURL(file);
+        video.src = videoUrl;
+
+        let currentTime = 0;
+        let index = 0;
 
         try {
-            if (!ffmpeg.isLoaded()) {
-                await ffmpeg.load();
-            }
-
-            const inputName = 'input.mp4';
-            status.innerText = 'ファイルを読み込み中...';
-            ffmpeg.FS('writeFile', inputName, await fetchFile(file));
-
-            const sec = splitSec.value;
-            status.innerText = '分割処理を実行中...';
-
-            // 動画の再エンコードを避け、コピー（-c copy）で高速分割
-            await ffmpeg.run(
-                '-i', inputName,
-                '-f', 'segment',
-                '-segment_time', sec,
-                '-reset_timestamps', '1',
-                '-c', 'copy',
-                'out%d.mp4'
-            );
-
-            status.innerText = 'ZIPファイルを作成中...';
-            const zip = new JSZip();
-            const files = ffmpeg.FS('readdir', '.');
-            
-            const outFiles = files.filter(f => f.startsWith('out') && f.endsWith('.mp4'))
-                                  .sort((a, b) => {
-                                      return parseInt(a.match(/\d+/)) - parseInt(b.match(/\d+/));
-                                  });
-            
-            if (outFiles.length === 0) throw new Error('分割に失敗しました。');
-
-            for (let i = 0; i < outFiles.length; i++) {
-                const data = ffmpeg.FS('readFile', outFiles[i]);
-                const currentNum = parseInt(startNum.value) + i;
-                const formattedNum = String(currentNum).padStart(parseInt(digit.value), '0');
+            while (currentTime < duration) {
+                status.innerText = `分割中: ${Math.round((currentTime/duration)*100)}%`;
                 
-                zip.file(`${formattedNum}.mp4`, data);
-                ffmpeg.FS('unlink', outFiles[i]); // メモリ節約
+                const blob = await extractSegment(video, currentTime, interval);
+                const fileNum = parseInt(startNum.value) + index;
+                const fileName = String(fileNum).padStart(parseInt(digit.value), '0') + ".mp4";
+                
+                zip.file(fileName, blob);
+                
+                currentTime += interval;
+                index++;
             }
 
-            const content = await zip.generateAsync({ type: 'blob' });
-            const url = URL.createObjectURL(content);
+            status.innerText = "ZIPを生成中...";
+            const zipBlob = await zip.generateAsync({type: "blob"});
+            const downloadUrl = URL.createObjectURL(zipBlob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `split_videos_${Date.now()}.zip`;
+            a.href = downloadUrl;
+            a.download = "split_videos.zip";
             a.click();
-
-            status.innerText = '完了しました！';
-            ffmpeg.FS('unlink', inputName);
-
+            
+            status.style.color = "green";
+            status.innerText = "完了しました！";
         } catch (e) {
             console.error(e);
-            status.innerHTML = `<span style="color:red;">エラーが発生しました。</span><br>
-                                <small>原因: ${e.message}<br>※ブラウザのセキュリティ設定やメモリ不足の可能性があります。</small>`;
+            status.innerText = "エラー: " + e.message;
         } finally {
             startBtn.disabled = false;
+            URL.revokeObjectURL(videoUrl);
         }
     });
+
+    function getDuration(file) {
+        return new Promise(resolve => {
+            const v = document.createElement('video');
+            v.src = URL.createObjectURL(file);
+            v.onloadedmetadata = () => resolve(v.duration);
+        });
+    }
+
+    function extractSegment(v, start, duration) {
+        return new Promise(resolve => {
+            const stream = v.captureStream();
+            const recorder = new MediaRecorder(stream, { mimeType: 'video/mp4; codecs=avc1' });
+            const chunks = [];
+
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/mp4' }));
+
+            v.currentTime = start;
+            v.onseeked = () => {
+                v.play();
+                recorder.start();
+                setTimeout(() => {
+                    recorder.stop();
+                    v.pause();
+                }, duration * 1000);
+            };
+        });
+    }
 </script>
 
 </body>
