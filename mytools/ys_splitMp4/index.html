@@ -69,95 +69,83 @@
         if (!file) return alert('動画を選択してください');
 
         startBtn.disabled = true;
-        status.innerText = "動画データを読み込み中...";
+        status.innerText = "準備中...";
 
         const video = document.createElement('video');
         video.playsInline = true;
         video.muted = true;
-        video.preload = "auto";
-        const videoUrl = URL.createObjectURL(file);
-        video.src = videoUrl;
+        video.src = URL.createObjectURL(file);
 
         try {
-            // 【重要】iPhoneで動画データを強制的にバッファリングさせる処理
-            await new Promise((resolve, reject) => {
-                video.onloadeddata = async () => {
-                    try {
-                        // 一瞬再生して即座に停止することで、iPhoneにデコーダーを準備させる
-                        await video.play();
-                        video.pause();
-                        video.currentTime = 0;
-                        resolve();
-                    } catch (e) {
-                        reject(new Error("iPhoneの再生制限により動画を初期化できませんでした。"));
-                    }
-                };
-                video.onerror = () => reject(new Error("動画ファイルの形式が読み込めません。"));
-                setTimeout(() => reject(new Error("読み込みがタイムアウトしました。")), 15000);
-            });
-
-            // readyStateが4（十分なデータがある状態）になるのを待つ
-            if (video.readyState < 4) {
-                await new Promise(r => video.oncanplaythrough = r);
-            }
+            await video.play(); // iPhoneのデコーダ活性化
+            video.pause();
 
             const width = video.videoWidth;
             const height = video.videoHeight;
+            const vWidth = width - (width % 2);
+            const vHeight = height - (height % 2);
             const duration = video.duration;
             const interval = parseInt(splitSec.value);
             const fps = 30;
             const zip = new JSZip();
 
-            const vWidth = width - (width % 2);
-            const vHeight = height - (height % 2);
-
-            let currentStartTime = 0;
             let fileCount = 0;
+            let currentStartTime = 0;
 
             while (currentStartTime < duration) {
+                status.innerText = `分割中: ${fileCount + 1}個目...`;
+                
                 const segmentDuration = Math.min(interval, duration - currentStartTime);
-                status.innerText = `分割中: ${fileCount + 1}個目のファイル...`;
-
                 const muxer = new Muxer({
                     target: new ArrayBufferTarget(),
                     video: { codec: 'avc', width: vWidth, height: vHeight },
                     fastStart: 'in-memory'
                 });
 
+                let videoTrackInitReceived = false;
+
                 const encoder = new VideoEncoder({
-                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+                    output: (chunk, meta) => {
+                        // iPhone対策: metaが存在し、かつtrack情報が含まれている場合のみ追加
+                        if (meta && meta.decoderConfig) {
+                            videoTrackInitReceived = true;
+                        }
+                        muxer.addVideoChunk(chunk, meta);
+                    },
                     error: (e) => { throw e; }
                 });
 
                 encoder.configure({
-                    codec: 'avc1.42E01E', 
+                    codec: 'avc1.42E01E',
                     width: vWidth,
                     height: vHeight,
-                    bitrate: 1_200_000, 
-                    framerate: fps
+                    bitrate: 1_200_000,
+                    framerate: fps,
+                    latencyMode: 'realtime' // iPhoneでのメタデータ生成を早める
                 });
 
-                for (let t = 0; t < segmentDuration; t += (1/fps)) {
-                    const timestamp = currentStartTime + t;
-                    if (timestamp >= duration) break;
+                // --- 1フレーム目だけ先に処理してメタデータを確定させる ---
+                video.currentTime = currentStartTime;
+                await new Promise(r => video.onseeked = r);
+                const firstFrame = new VideoFrame(video, { timestamp: 0 });
+                encoder.encode(firstFrame, { keyFrame: true });
+                firstFrame.close();
+                
+                // メタデータ(track.info)が確定するまで最大1秒待機
+                let waitCount = 0;
+                while (!videoTrackInitReceived && waitCount < 20) {
+                    await new Promise(r => setTimeout(r, 50));
+                    waitCount++;
+                }
 
-                    video.currentTime = timestamp;
-                    
-                    // シークが完了し、描画可能になるまで待機
-                    await new Promise(r => {
-                        const onSeeked = () => {
-                            video.removeEventListener('seeked', onSeeked);
-                            r();
-                        };
-                        video.addEventListener('seeked', onSeeked);
-                    });
-
-                    // 念押し：データがあることを確認してからVideoFrame化
-                    if (video.readyState >= 2) {
-                        const frame = new VideoFrame(video, { timestamp: Math.round(t * 1_000_000) });
-                        encoder.encode(frame, { keyFrame: t === 0 });
-                        frame.close();
-                    }
+                // 残りのフレームを処理
+                for (let t = (1/fps); t < segmentDuration; t += (1/fps)) {
+                    if (currentStartTime + t >= duration) break;
+                    video.currentTime = currentStartTime + t;
+                    await new Promise(r => video.onseeked = r);
+                    const frame = new VideoFrame(video, { timestamp: Math.round(t * 1_000_000) });
+                    encoder.encode(frame);
+                    frame.close();
                 }
 
                 await encoder.flush();
@@ -171,21 +159,19 @@
             }
 
             status.innerText = "ZIP生成中...";
-            const zipBlob = await zip.generateAsync({ type: "blob" });
-            const downloadUrl = URL.createObjectURL(zipBlob);
+            const blob = await zip.generateAsync({ type: "blob" });
+            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `preBuild_split.zip`;
+            a.href = url;
+            a.download = "split_videos.zip";
             a.click();
-
-            status.innerText = "完了！";
+            status.innerText = "完了しました";
 
         } catch (e) {
             console.error(e);
-            status.innerText = `エラー: ${e.message}\n※iPhoneの省電力モードをオフにして試してください。`;
+            status.innerText = "エラー: " + e.message;
         } finally {
             startBtn.disabled = false;
-            URL.revokeObjectURL(videoUrl);
         }
     });
 </script>
