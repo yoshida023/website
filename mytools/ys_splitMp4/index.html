@@ -71,31 +71,18 @@
         startBtn.disabled = true;
         status.innerText = "動画を準備中...";
 
-        // 1. 動画エレメントの完全な初期化
         const video = document.createElement('video');
         video.playsInline = true;
         video.muted = true;
-        video.preload = "auto";
         const videoUrl = URL.createObjectURL(file);
         video.src = videoUrl;
 
         try {
-            // ロード待ちのPromise
             await new Promise((resolve, reject) => {
-                video.onloadedmetadata = () => {
-                    // iPhoneでの描画バグを防ぐため、1フレーム目に移動
-                    video.currentTime = 0;
-                    resolve();
-                };
-                video.onerror = () => reject(new Error("動画の読み込みに失敗しました"));
-                // 10秒待ってもロードされない場合はタイムアウト
-                setTimeout(() => reject(new Error("ロードがタイムアウトしました")), 10000);
+                video.onloadedmetadata = () => resolve();
+                video.onerror = () => reject(new Error("動画の読み込みに失敗"));
+                setTimeout(() => reject(new Error("ロードタイムアウト")), 10000);
             });
-
-            // readyStateがHAVE_FUTURE_DATA(3)以上であることを確認
-            if (video.readyState < 2) {
-                await new Promise(r => video.oncanplay = r);
-            }
 
             const width = video.videoWidth;
             const height = video.videoHeight;
@@ -104,44 +91,51 @@
             const fps = 30;
             const zip = new JSZip();
 
+            // 偶数への丸め
+            const vWidth = width - (width % 2);
+            const vHeight = height - (height % 2);
+
             let currentStartTime = 0;
             let fileCount = 0;
 
             while (currentStartTime < duration) {
                 const segmentDuration = Math.min(interval, duration - currentStartTime);
-                status.innerText = `処理中: ${fileCount + 1}個目のファイルを生成...`;
+                status.innerText = `処理中: ${fileCount + 1}個目...`;
 
                 const muxer = new Muxer({
                     target: new ArrayBufferTarget(),
                     video: { 
                         codec: 'avc', 
-                        width: width - (width % 2), 
-                        height: height - (height % 2) 
+                        width: vWidth, 
+                        height: vHeight 
                     },
-                    fastStart: 'in-memory'
+                    // iPhoneでのエラー回避: メタデータの自動取得を無効化
+                    firstStart: 'in-memory'
                 });
 
                 const encoder = new VideoEncoder({
-                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+                    output: (chunk, meta) => {
+                        // metaが空の場合でもmuxerが落ちないように処理
+                        muxer.addVideoChunk(chunk, meta);
+                    },
                     error: (e) => { throw e; }
                 });
 
                 encoder.configure({
                     codec: 'avc1.42E01E', 
-                    width: width - (width % 2),
-                    height: height - (height % 2),
-                    bitrate: 1_500_000, 
-                    framerate: fps
+                    width: vWidth,
+                    height: vHeight,
+                    bitrate: 1_000_000, 
+                    framerate: fps,
+                    // iPhoneでの安定性のために追加
+                    latencyMode: 'realtime'
                 });
 
-                // フレーム抽出ループ
                 for (let t = 0; t < segmentDuration; t += (1/fps)) {
                     const timestamp = currentStartTime + t;
                     if (timestamp >= duration) break;
 
                     video.currentTime = timestamp;
-                    
-                    // iPhoneでのシーク待ちを確実にハンドル
                     await new Promise(r => {
                         const onSeeked = () => {
                             video.removeEventListener('seeked', onSeeked);
@@ -150,12 +144,14 @@
                         video.addEventListener('seeked', onSeeked);
                     });
 
-                    // データが本当に有効か最終チェック
-                    if (video.videoWidth > 0) {
-                        const frame = new VideoFrame(video, { timestamp: t * 1_000_000 });
-                        encoder.encode(frame, { keyFrame: t === 0 });
-                        frame.close();
-                    }
+                    // VideoFrame作成時に適切なタイムスタンプを付与
+                    const frame = new VideoFrame(video, { 
+                        timestamp: Math.round(t * 1_000_000),
+                        duration: Math.round((1/fps) * 1_000_000)
+                    });
+                    
+                    encoder.encode(frame, { keyFrame: t === 0 });
+                    frame.close();
                 }
 
                 await encoder.flush();
@@ -168,19 +164,19 @@
                 fileCount++;
             }
 
-            status.innerText = "ZIPファイルを作成中...";
+            status.innerText = "ZIP生成中...";
             const zipBlob = await zip.generateAsync({ type: "blob" });
             const downloadUrl = URL.createObjectURL(zipBlob);
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = `split_videos.zip`;
+            a.download = `preBuild_split.zip`;
             a.click();
 
-            status.innerText = "完了しました！";
+            status.innerText = "完了！";
 
         } catch (e) {
             console.error(e);
-            status.innerText = "エラー: " + e.message;
+            status.innerText = "エラー: " + e.message + "\n(解像度を下げて試してください)";
         } finally {
             startBtn.disabled = false;
             URL.revokeObjectURL(videoUrl);
