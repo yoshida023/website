@@ -69,20 +69,37 @@
         if (!file) return alert('動画を選択してください');
 
         startBtn.disabled = true;
-        status.innerText = "動画を準備中...";
+        status.innerText = "動画データを読み込み中...";
 
         const video = document.createElement('video');
         video.playsInline = true;
         video.muted = true;
+        video.preload = "auto";
         const videoUrl = URL.createObjectURL(file);
         video.src = videoUrl;
 
         try {
+            // 【重要】iPhoneで動画データを強制的にバッファリングさせる処理
             await new Promise((resolve, reject) => {
-                video.onloadedmetadata = () => resolve();
-                video.onerror = () => reject(new Error("動画の読み込みに失敗"));
-                setTimeout(() => reject(new Error("ロードタイムアウト")), 10000);
+                video.onloadeddata = async () => {
+                    try {
+                        // 一瞬再生して即座に停止することで、iPhoneにデコーダーを準備させる
+                        await video.play();
+                        video.pause();
+                        video.currentTime = 0;
+                        resolve();
+                    } catch (e) {
+                        reject(new Error("iPhoneの再生制限により動画を初期化できませんでした。"));
+                    }
+                };
+                video.onerror = () => reject(new Error("動画ファイルの形式が読み込めません。"));
+                setTimeout(() => reject(new Error("読み込みがタイムアウトしました。")), 15000);
             });
+
+            // readyStateが4（十分なデータがある状態）になるのを待つ
+            if (video.readyState < 4) {
+                await new Promise(r => video.oncanplaythrough = r);
+            }
 
             const width = video.videoWidth;
             const height = video.videoHeight;
@@ -91,7 +108,6 @@
             const fps = 30;
             const zip = new JSZip();
 
-            // 偶数への丸め
             const vWidth = width - (width % 2);
             const vHeight = height - (height % 2);
 
@@ -100,17 +116,12 @@
 
             while (currentStartTime < duration) {
                 const segmentDuration = Math.min(interval, duration - currentStartTime);
-                status.innerText = `処理中: ${fileCount + 1}個目のファイルを生成中...`;
+                status.innerText = `分割中: ${fileCount + 1}個目のファイル...`;
 
-                // エラー回避: fastStartオプションをより明示的な形式に変更
                 const muxer = new Muxer({
                     target: new ArrayBufferTarget(),
-                    video: { 
-                        codec: 'avc', 
-                        width: vWidth, 
-                        height: vHeight 
-                    },
-                    fastStart: 'in-memory' // 文字列として確実に認識させる
+                    video: { codec: 'avc', width: vWidth, height: vHeight },
+                    fastStart: 'in-memory'
                 });
 
                 const encoder = new VideoEncoder({
@@ -123,16 +134,16 @@
                     width: vWidth,
                     height: vHeight,
                     bitrate: 1_200_000, 
-                    framerate: fps,
-                    latencyMode: 'quality'
+                    framerate: fps
                 });
 
-                // フレーム抽出ループ
                 for (let t = 0; t < segmentDuration; t += (1/fps)) {
                     const timestamp = currentStartTime + t;
                     if (timestamp >= duration) break;
 
                     video.currentTime = timestamp;
+                    
+                    // シークが完了し、描画可能になるまで待機
                     await new Promise(r => {
                         const onSeeked = () => {
                             video.removeEventListener('seeked', onSeeked);
@@ -141,12 +152,12 @@
                         video.addEventListener('seeked', onSeeked);
                     });
 
-                    // 1フレーム目をキーフレームとして確実に処理
-                    const frame = new VideoFrame(video, { 
-                        timestamp: Math.round(t * 1_000_000) 
-                    });
-                    encoder.encode(frame, { keyFrame: t === 0 });
-                    frame.close();
+                    // 念押し：データがあることを確認してからVideoFrame化
+                    if (video.readyState >= 2) {
+                        const frame = new VideoFrame(video, { timestamp: Math.round(t * 1_000_000) });
+                        encoder.encode(frame, { keyFrame: t === 0 });
+                        frame.close();
+                    }
                 }
 
                 await encoder.flush();
@@ -167,12 +178,11 @@
             a.download = `preBuild_split.zip`;
             a.click();
 
-            status.innerText = "完了しました！";
+            status.innerText = "完了！";
 
         } catch (e) {
             console.error(e);
-            // エラーの詳細を表示
-            status.innerText = `エラーが発生しました:\n${e.message}`;
+            status.innerText = `エラー: ${e.message}\n※iPhoneの省電力モードをオフにして試してください。`;
         } finally {
             startBtn.disabled = false;
             URL.revokeObjectURL(videoUrl);
