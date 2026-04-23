@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>preBuild for hp2025 - Video Splitter</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f4f4f9; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.2rem; text-align: center; color: #007aff; }
+        .item { margin-bottom: 15px; }
+        label { display: block; font-size: 0.9rem; margin-bottom: 5px; font-weight: bold; }
+        select, input, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 1rem; }
+        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 15px; font-size: 0.85rem; color: #666; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>preBuild for hp2025</h1>
+    
+    <div class="item">
+        <label>動画ファイルを選択</label>
+        <input type="file" id="videoInput" accept="video/mp4">
+    </div>
+
+    <div class="item">
+        <label>分割秒数</label>
+        <select id="splitSec">
+            <option value="1">1秒</option>
+            <option value="2">2秒</option>
+            <option value="3">3秒</option>
+            <option value="4">4秒</option>
+        </select>
+    </div>
+
+    <div class="item">
+        <label>ファイル名 桁数</label>
+        <select id="digit">
+            <option value="2">2桁 (01, 02...)</option>
+            <option value="3">3桁 (001, 002...)</option>
+        </select>
+    </div>
+
+    <div class="item">
+        <label>開始数値</label>
+        <input type="number" id="startNum" value="1" min="0">
+    </div>
+
+    <button id="startBtn">分割・圧縮を開始</button>
+    <div id="status">待機中...</div>
+</div>
+
+<script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+
+    const videoInput = document.getElementById('videoInput');
+    const splitSec = document.getElementById('splitSec');
+    const digit = document.getElementById('digit');
+    const startNum = document.getElementById('startNum');
+    const startBtn = document.getElementById('startBtn');
+    const status = document.getElementById('status');
+
+    startBtn.addEventListener('click', async () => {
+        const file = videoInput.files[0];
+        if (!file) return alert('動画ファイルを選択してください');
+
+        startBtn.disabled = true;
+        status.innerText = 'FFmpegを読み込み中...';
+
+        try {
+            if (!ffmpeg.isLoaded()) await ffmpeg.load();
+
+            status.innerText = '動画を解析中...';
+            const name = 'input.mp4';
+            ffmpeg.FS('writeFile', name, await fetchFile(file));
+
+            // 分割処理
+            // -f segment で指定秒数ごとに分割
+            const sec = splitSec.value;
+            status.innerText = `${sec}秒ごとに分割中... (時間がかかる場合があります)`;
+            
+            await ffmpeg.run(
+                '-i', name,
+                '-f', 'segment',
+                '-segment_time', sec,
+                '-reset_timestamps', '1',
+                '-c', 'copy',
+                'out%d.mp4'
+            );
+
+            status.innerText = 'ZIP圧縮中...';
+            const zip = new JSZip();
+            const files = ffmpeg.FS('readdir', '.');
+            
+            // 生成されたout番号付きファイルをリネームしてZIPへ
+            const outFiles = files.filter(f => f.startsWith('out') && f.endsWith('.mp4'));
+            
+            for (let i = 0; i < outFiles.length; i++) {
+                const data = ffmpeg.FS('readFile', outFiles[i]);
+                const currentNum = parseInt(startNum.value) + i;
+                const formattedNum = String(currentNum).padStart(parseInt(digit.value), '0');
+                zip.file(`${formattedNum}.mp4`, data);
+                
+                // メモリ解放のためにFFmpeg内のファイルを削除
+                ffmpeg.FS('unlink', outFiles[i]);
+            }
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'split_videos.zip';
+            a.click();
+
+            status.innerText = '完了！ダウンロードされました。';
+        } catch (e) {
+            console.error(e);
+            status.innerText = 'エラーが発生しました。';
+        } finally {
+            startBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
