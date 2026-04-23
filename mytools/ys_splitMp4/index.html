@@ -14,8 +14,7 @@
         select, input, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 1rem; }
         button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
         button:disabled { background: #ccc; }
-        #status { margin-top: 15px; font-size: 0.85rem; color: #d00; text-align: center; white-space: pre-wrap; }
-        video { display: none; } /* プレビュー不要な場合は非表示 */
+        #status { margin-top: 15px; font-size: 0.85rem; color: #666; text-align: center; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -24,7 +23,7 @@
     <h1>preBuild for hp2025</h1>
     
     <div class="item">
-        <label>1. 動画を選択</label>
+        <label>1. 動画を選択 (MP4)</label>
         <input type="file" id="videoInput" accept="video/mp4,video/quicktime">
     </div>
 
@@ -52,97 +51,131 @@
     </div>
 
     <button id="startBtn">分割・圧縮を開始</button>
-    <div id="status"></div>
-    <video id="v" playsinline muted></video>
+    <div id="status">待機中</div>
 </div>
 
-<script>
+<script type="module">
+    // mp4-muxerをインポート
+    import { Muxer, ArrayBufferTarget } from 'https://unpkg.com/mp4-muxer@latest/build/mp4-muxer.mjs';
+
     const videoInput = document.getElementById('videoInput');
     const splitSec = document.getElementById('splitSec');
     const digit = document.getElementById('digit');
     const startNum = document.getElementById('startNum');
     const startBtn = document.getElementById('startBtn');
     const status = document.getElementById('status');
-    const video = document.getElementById('v');
 
     startBtn.addEventListener('click', async () => {
         const file = videoInput.files[0];
         if (!file) return alert('動画を選択してください');
 
+        if (!window.VideoEncoder) {
+            return alert('お使いのブラウザはWebCodecsに対応していません。最新のiOS/Safari、またはChromeをお使いください。');
+        }
+
         startBtn.disabled = true;
-        status.style.color = "#666";
-        status.innerText = "処理中... (動画の長さと同じ時間がかかります)";
-
-        const zip = new JSZip();
-        const duration = await getDuration(file);
-        const interval = parseInt(splitSec.value);
-        const videoUrl = URL.createObjectURL(file);
-        video.src = videoUrl;
-
-        let currentTime = 0;
-        let index = 0;
+        status.innerText = "動画を解析中...\n(iPhoneの場合、少し時間がかかることがあります)";
 
         try {
-            while (currentTime < duration) {
-                status.innerText = `分割中: ${Math.round((currentTime/duration)*100)}%`;
-                
-                const blob = await extractSegment(video, currentTime, interval);
-                const fileNum = parseInt(startNum.value) + index;
-                const fileName = String(fileNum).padStart(parseInt(digit.value), '0') + ".mp4";
-                
-                zip.file(fileName, blob);
-                
-                currentTime += interval;
-                index++;
+            const zip = new JSZip();
+            const interval = parseInt(splitSec.value);
+            const startIdx = parseInt(startNum.value);
+            const digitVal = parseInt(digit.value);
+
+            // 動画読み込み用の準備
+            const video = document.createElement('video');
+            video.src = URL.createObjectURL(file);
+            video.muted = true;
+            video.playsInline = true;
+            
+            await new Promise((resolve) => {
+                video.onloadedmetadata = resolve;
+            });
+
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            const duration = video.duration;
+            const fps = 30; // 処理の安定性のための固定FPS
+
+            let currentStartTime = 0;
+            let fileCount = 0;
+
+            while (currentStartTime < duration) {
+                const segmentDuration = Math.min(interval, duration - currentStartTime);
+                status.innerText = `分割中: ${fileCount + 1}個目のファイルを作成中...`;
+
+                const muxer = new Muxer({
+                    target: new ArrayBufferTarget(),
+                    video: { 
+                        codec: 'avc', 
+                        width: width % 2 === 0 ? width : width - 1, 
+                        height: height % 2 === 0 ? height : height - 1 
+                    },
+                    fastStart: 'in-memory'
+                });
+
+                const encoder = new VideoEncoder({
+                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+                    error: (e) => { throw e; }
+                });
+
+                // iPhone/Safariでも通りやすいH.264設定
+                encoder.configure({
+                    codec: 'avc1.42E01E', 
+                    width: width % 2 === 0 ? width : width - 1,
+                    height: height % 2 === 0 ? height : height - 1,
+                    bitrate: 2_500_000, // 2.5Mbps
+                    framerate: fps
+                });
+
+                // フレーム抽出ループ
+                for (let t = 0; t < segmentDuration; t += (1/fps)) {
+                    video.currentTime = currentStartTime + t;
+                    // seeked完了を待機
+                    await new Promise(r => {
+                        const onSeeked = () => {
+                            video.removeEventListener('seeked', onSeeked);
+                            r();
+                        };
+                        video.addEventListener('seeked', onSeeked);
+                    });
+                    
+                    const frame = new VideoFrame(video, { timestamp: t * 1_000_000 });
+                    encoder.encode(frame, { keyFrame: t === 0 });
+                    frame.close();
+                }
+
+                await encoder.flush();
+                muxer.finalize();
+
+                const { buffer } = muxer.target;
+                const fileName = String(startIdx + fileCount).padStart(digitVal, '0') + ".mp4";
+                zip.file(fileName, buffer);
+
+                currentStartTime += interval;
+                fileCount++;
             }
 
-            status.innerText = "ZIPを生成中...";
-            const zipBlob = await zip.generateAsync({type: "blob"});
+            status.innerText = "ZIPを生成しています...";
+            const zipBlob = await zip.generateAsync({ type: "blob" });
             const downloadUrl = URL.createObjectURL(zipBlob);
+            
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = "split_videos.zip";
+            a.download = `preBuild_split_${Date.now()}.zip`;
             a.click();
-            
+
             status.style.color = "green";
-            status.innerText = "完了しました！";
+            status.innerText = "成功しました！ダウンロードを確認してください。";
+            
         } catch (e) {
             console.error(e);
-            status.innerText = "エラー: " + e.message;
+            status.style.color = "red";
+            status.innerText = "エラーが発生しました:\n" + e.message;
         } finally {
             startBtn.disabled = false;
-            URL.revokeObjectURL(videoUrl);
         }
     });
-
-    function getDuration(file) {
-        return new Promise(resolve => {
-            const v = document.createElement('video');
-            v.src = URL.createObjectURL(file);
-            v.onloadedmetadata = () => resolve(v.duration);
-        });
-    }
-
-    function extractSegment(v, start, duration) {
-        return new Promise(resolve => {
-            const stream = v.captureStream();
-            const recorder = new MediaRecorder(stream, { mimeType: 'video/mp4; codecs=avc1' });
-            const chunks = [];
-
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/mp4' }));
-
-            v.currentTime = start;
-            v.onseeked = () => {
-                v.play();
-                recorder.start();
-                setTimeout(() => {
-                    recorder.stop();
-                    v.pause();
-                }, duration * 1000);
-            };
-        });
-    }
 </script>
 
 </body>
