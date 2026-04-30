@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MD Memo Mobile - Editor Pro</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --nav-bg: #ffffff;
+            --share: #10b981;
+            --accent: #f59e0b;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--bg); color: var(--text); margin: 0; padding-bottom: 70px; height: 100vh; overflow: hidden; 
+        }
+
+        header { 
+            background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; 
+            position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .page { display: none; height: calc(100vh - 65px); overflow-y: auto; padding: 15px; }
+        .page.active { display: block; }
+
+        .input-field { 
+            width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 12px; 
+            font-size: 16px; background: white; outline: none;
+        }
+        textarea { height: 40vh !important; font-family: monospace; line-height: 1.4; }
+        
+        .category-suggestions { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 10px; }
+        .cat-chip { 
+            background: #e2e8f0; padding: 6px 14px; border-radius: 20px; font-size: 13px; 
+            white-space: nowrap; cursor: pointer; border: none; color: #475569;
+        }
+
+        .btn { 
+            width: 100%; border: none; padding: 15px; border-radius: 8px; font-size: 16px; 
+            font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px;
+        }
+        .save-btn { background: var(--primary); color: white; }
+        .share-btn { background: var(--share); color: white; }
+        .delete-btn-red { background: #fee2e2; color: #ef4444; font-weight: bold; }
+
+        /* リストカード */
+        .memo-card { 
+            background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; 
+            border: 1px solid #e2e8f0; position: relative;
+        }
+        .memo-info { margin-right: 80px; } /* ボタン用の余白 */
+        .memo-actions { 
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%); 
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .action-icon { 
+            background: #f1f5f9; border: none; width: 36px; height: 36px; 
+            border-radius: 50%; cursor: pointer; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .tag { font-size: 11px; background: #f1f5f9; color: #64748b; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+
+        .preview-box { background: white; padding: 20px; border-radius: 10px; line-height: 1.7; border: 1px solid #e2e8f0; }
+        .code-container { position: relative; margin: 15px 0; }
+        .preview-box pre { background: #1e293b; color: #f8fafc; padding: 15px; border-radius: 8px; overflow-x: auto; margin: 0; }
+        .copy-btn { 
+            position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.15); 
+            color: #fff; border: none; padding: 5px 10px; border-radius: 4px; font-size: 11px;
+        }
+
+        nav { 
+            position: fixed; bottom: 0; left: 0; right: 0; height: 65px; background: var(--nav-bg); 
+            border-top: 1px solid #e2e8f0; display: flex; justify-content: space-around; align-items: center; 
+        }
+        .nav-item { border: none; background: none; color: #94a3b8; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<header id="header-title">メモ作成</header>
+
+<div id="page-edit" class="page active">
+    <input type="text" id="memo-title" class="input-field" placeholder="タイトルを入力">
+    <input type="text" id="memo-category" class="input-field" placeholder="カテゴリ">
+    <div id="category-list" class="category-suggestions"></div>
+    <textarea id="memo-content" class="input-field" placeholder="Markdownをここにペースト..."></textarea>
+    <button class="btn save-btn" id="save-button-text" onclick="saveMemo()">💾 保存する</button>
+</div>
+
+<div id="page-list" class="page">
+    <div style="position:sticky; top:-15px; background:var(--bg); padding-bottom:10px; z-index:5;">
+        <input type="text" id="search-input" class="input-field" placeholder="検索..." oninput="renderList()">
+    </div>
+    <div id="list-container"></div>
+</div>
+
+<div id="page-view" class="page">
+    <h2 id="view-title" style="margin:0 0 5px 0;"></h2>
+    <div id="view-meta" style="margin-bottom:15px; color:#64748b; font-size:12px;"></div>
+    <div id="view-body" class="preview-box"></div>
+    <button class="btn share-btn" onclick="shareAsHtml()">📤 HTML共有</button>
+    <button class="btn delete-btn-red" onclick="deleteMemo(currentId)">🗑 削除</button>
+</div>
+
+<nav>
+    <button class="nav-item active" onclick="switchPage('edit')" id="nav-edit"><span>＋</span><span>作成</span></button>
+    <button class="nav-item" onclick="switchPage('list')" id="nav-list"><span>☰</span><span>一覧</span></button>
+    <button class="nav-item" onclick="switchPage('view')" id="nav-view" style="display:none;"><span>👁</span><span>閲覧</span></button>
+</nav>
+
+<script>
+    const DB_NAME = 'md_memo_v6';
+    let memos = JSON.parse(localStorage.getItem(DB_NAME) || '[]');
+    let lastCategory = localStorage.getItem('last_category') || '';
+    let currentId = null;
+    let isEditing = false;
+
+    window.onload = () => {
+        document.getElementById('memo-category').value = lastCategory;
+        updateCategorySuggestions();
+    };
+
+    function switchPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('page-' + pageId).classList.add('active');
+        document.getElementById('nav-' + pageId).classList.add('active');
+        
+        if(pageId !== 'edit') {
+            isEditing = false;
+            document.getElementById('save-button-text').innerText = "💾 保存する";
+        }
+
+        const titles = { edit: 'メモ作成', list: '保存済み', view: '閲覧' };
+        document.getElementById('header-title').innerText = titles[pageId];
+        if(pageId === 'edit') updateCategorySuggestions();
+        if(pageId === 'list') renderList();
+    }
+
+    function updateCategorySuggestions() {
+        const container = document.getElementById('category-list');
+        container.innerHTML = '';
+        const categories = [...new Set(memos.map(m => m.category))].filter(c => c && c !== '未分類');
+        categories.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = 'cat-chip';
+            btn.innerText = cat;
+            btn.onclick = () => document.getElementById('memo-category').value = cat;
+            container.appendChild(btn);
+        });
+    }
+
+    function saveMemo() {
+        const title = document.getElementById('memo-title').value || '無題のメモ';
+        const content = document.getElementById('memo-content').value;
+        const category = document.getElementById('memo-category').value || '未分類';
+        if (!content.trim()) return alert('内容を入力してください');
+
+        if (isEditing && currentId) {
+            // 上書き編集
+            const index = memos.findIndex(m => m.id === currentId);
+            memos[index] = { ...memos[index], title, content, category, date: new Date().toLocaleString('ja-JP') + " (更新)" };
+            isEditing = false;
+        } else {
+            // 新規作成
+            const newMemo = { id: Date.now(), title, content, category, date: new Date().toLocaleString('ja-JP') };
+            memos.unshift(newMemo);
+        }
+
+        localStorage.setItem(DB_NAME, JSON.stringify(memos));
+        localStorage.setItem('last_category', category);
+        
+        document.getElementById('memo-title').value = '';
+        document.getElementById('memo-content').value = '';
+        switchPage('list');
+    }
+
+    function renderList() {
+        const query = document.getElementById('search-input').value.toLowerCase();
+        const container = document.getElementById('list-container');
+        container.innerHTML = '';
+        const filtered = memos.filter(m => m.title.toLowerCase().includes(query) || m.content.toLowerCase().includes(query) || m.category.toLowerCase().includes(query));
+        
+        filtered.forEach(memo => {
+            const div = document.createElement('div');
+            div.className = 'memo-card';
+            div.innerHTML = `
+                <div class="memo-info" onclick="showMemo(${memo.id})">
+                    <h4 style="margin:0;">${memo.title}</h4>
+                    <span class="tag">${memo.category}</span>
+                    <div style="font-size:11px; color:#94a3b8; margin-top:8px;">${memo.date}</div>
+                </div>
+                <div class="memo-actions">
+                    <button class="action-icon" onclick="editMemo(${memo.id})" title="編集">✏️</button>
+                    <button class="action-icon" onclick="deleteMemo(${memo.id})" title="削除" style="color:red;">🗑</button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function showMemo(id) {
+        currentId = id;
+        const memo = memos.find(m => m.id === id);
+        if (!memo) return;
+        document.getElementById('view-title').innerText = memo.title;
+        document.getElementById('view-meta').innerText = `${memo.category} | ${memo.date}`;
+        document.getElementById('view-body').innerHTML = marked.parse(memo.content);
+        addCopyButtons();
+        document.getElementById('nav-view').style.display = 'flex';
+        switchPage('view');
+    }
+
+    function editMemo(id) {
+        currentId = id;
+        const memo = memos.find(m => m.id === id);
+        if (!memo) return;
+
+        document.getElementById('memo-title').value = memo.title;
+        document.getElementById('memo-content').value = memo.content;
+        document.getElementById('memo-category').value = memo.category;
+        
+        isEditing = true;
+        document.getElementById('save-button-text').innerText = "🆙 更新する";
+        switchPage('edit');
+    }
+
+    function addCopyButtons() {
+        document.querySelectorAll('#view-body pre').forEach(pre => {
+            if (pre.parentElement.className === 'code-container') return;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-container';
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.innerText = 'コピー';
+            btn.onclick = () => {
+                navigator.clipboard.writeText(pre.innerText).then(() => {
+                    btn.innerText = '完了!';
+                    setTimeout(() => btn.innerText = 'コピー', 2000);
+                });
+            };
+            wrapper.appendChild(btn);
+        });
+    }
+
+    function shareAsHtml() {
+        const memo = memos.find(m => m.id === currentId);
+        if (!memo) return;
+        const now = new Date();
+        const ts = now.getFullYear() + ('0' + (now.getMonth() + 1)).slice(-2) + ('0' + now.getDate()).slice(-2) + "_" + ('0' + now.getHours()).slice(-2) + ('0' + now.getMinutes()).slice(-2) + ('0' + now.getSeconds()).slice(-2);
+        const safeName = `${memo.category}_${memo.title}_${ts}`.replace(/[\\/:*?"<>|]/g, '_');
+        const b64 = btoa(unescape(encodeURIComponent(memo.content)));
+        const template = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>${memo.title}</title><script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"><\/script><style>body{font-family:sans-serif;line-height:1.6;color:#1e293b;max-width:800px;margin:0 auto;padding:20px;background:#f8fafc}.card{background:white;padding:30px;border-radius:12px;border:1px solid #e2e8f0}h1{color:#2563eb;border-bottom:2px solid #e2e8f0;padding-bottom:10px}pre{background:#1e293b;color:#f8fafc;padding:15px;border-radius:8px;overflow-x:auto}code{background:#f1f5f9;padding:2px 4px;border-radius:4px;color:#e11d48}</style></head><body><div class="card"><h1>${memo.title}</h1><div id="content"></div></div><script>try{const b="${b64}";const m=decodeURIComponent(escape(atob(b)));document.getElementById('content').innerHTML=marked.parse(m)}catch(e){document.getElementById('content').innerText="Error"}<\/script></body></html>`;
+        const blob = new Blob([template], { type: 'text/html' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${safeName}.html`;
+        link.click();
+    }
+
+    function deleteMemo(id) {
+        if (!confirm('このメモを削除しますか？')) return;
+        memos = memos.filter(m => m.id !== id);
+        localStorage.setItem(DB_NAME, JSON.stringify(memos));
+        document.getElementById('nav-view').style.display = 'none';
+        switchPage('list');
+    }
+</script>
+</body>
+</html>
