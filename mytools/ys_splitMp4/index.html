@@ -64,7 +64,7 @@
         if (!file) return alert('動画を選択してください');
 
         startBtn.disabled = true;
-        status.innerText = "動画を読み込み中...";
+        status.innerText = "動画を初期化中...";
 
         const video = document.createElement('video');
         video.playsInline = true;
@@ -80,14 +80,21 @@
             const vWidth = width - (width % 2);
             const vHeight = height - (height % 2);
             const duration = video.duration;
-            const interval = parseInt(splitSec.value);
+            const intervalSec = parseInt(splitSec.value);
             const fps = 30;
+            const totalFramesPerSegment = intervalSec * fps; // 1ファイルあたりのフレーム数を固定
             const zip = new JSZip();
 
-            let fileCount = 0;
-            let currentStartTime = 0;
+            // 描画安定化のためのCanvas
+            const canvas = document.createElement('canvas');
+            canvas.width = vWidth;
+            canvas.height = vHeight;
+            const ctx = canvas.getContext('2d');
 
-            while (currentStartTime < duration) {
+            let currentGlobalTime = 0;
+            let fileCount = 0;
+
+            while (currentGlobalTime < duration) {
                 status.innerText = `分割中: ${fileCount + 1}個目...`;
                 
                 const muxer = new Muxer({
@@ -96,15 +103,10 @@
                     fastStart: 'in-memory'
                 });
 
-                // --- 1. エンコーダーの作成 ---
                 let isConfigured = false;
                 const encoder = new VideoEncoder({
                     output: (chunk, meta) => {
-                        // iPhone対策: metaが完全に揃っていることを確認してからMuxerへ
-                        if (meta && meta.decoderConfig) {
-                            isConfigured = true;
-                        }
-                        // 既に構成済みか、metaが含まれる最初のチャンクのみ通す
+                        if (meta && meta.decoderConfig) isConfigured = true;
                         muxer.addVideoChunk(chunk, meta);
                     },
                     error: (e) => { throw e; }
@@ -116,33 +118,39 @@
                     height: vHeight,
                     bitrate: 1_200_000,
                     framerate: fps,
-                    latencyMode: 'realtime' 
+                    latencyMode: 'realtime'
                 });
 
-                const segmentDuration = Math.min(interval, duration - currentStartTime);
+                // フレーム処理ループ
+                for (let i = 0; i < totalFramesPerSegment; i++) {
+                    const timestamp = currentGlobalTime + (i / fps);
+                    if (timestamp >= duration) break; // 動画終了なら終了
 
-                // --- 2. 最初のフレーム（キーフレーム）を投入し、メタデータ確定を待つ ---
-                video.currentTime = currentStartTime;
-                await new Promise(r => video.onseeked = r);
-                
-                const firstFrame = new VideoFrame(video, { timestamp: 0 });
-                encoder.encode(firstFrame, { keyFrame: true });
-                firstFrame.close();
+                    video.currentTime = timestamp;
+                    await new Promise(r => {
+                        const onSeeked = () => {
+                            video.removeEventListener('seeked', onSeeked);
+                            r();
+                        };
+                        video.addEventListener('seeked', onSeeked);
+                    });
 
-                // iPhoneのメタデータ生成待ち (最大2秒)
-                for (let i = 0; i < 40 && !isConfigured; i++) {
-                    await new Promise(r => setTimeout(r, 50));
-                }
-
-                // --- 3. 残りのフレームを処理 ---
-                for (let t = (1/fps); t < segmentDuration; t += (1/fps)) {
-                    if (currentStartTime + t >= duration) break;
-                    video.currentTime = currentStartTime + t;
-                    await new Promise(r => video.onseeked = r);
+                    // Canvasに転写することで描画を確定させる
+                    ctx.drawImage(video, 0, 0, vWidth, vHeight);
                     
-                    const frame = new VideoFrame(video, { timestamp: Math.round(t * 1_000_000) });
-                    encoder.encode(frame);
+                    const frame = new VideoFrame(canvas, { 
+                        timestamp: Math.round(i * (1000000 / fps)) 
+                    });
+                    
+                    encoder.encode(frame, { keyFrame: i === 0 });
                     frame.close();
+
+                    // iPhone対策: 初回のみメタデータ確定待ち
+                    if (i === 0 && !isConfigured) {
+                        for (let j = 0; j < 20 && !isConfigured; j++) {
+                            await new Promise(r => setTimeout(r, 50));
+                        }
+                    }
                 }
 
                 await encoder.flush();
@@ -151,8 +159,11 @@
                 const fileName = String(parseInt(startNum.value) + fileCount).padStart(parseInt(digit.value), '0') + ".mp4";
                 zip.file(fileName, muxer.target.buffer);
 
-                currentStartTime += interval;
+                currentGlobalTime += intervalSec;
                 fileCount++;
+                
+                // 動画の最後まで到達していたらループを抜ける
+                if (currentGlobalTime >= duration) break;
             }
 
             status.innerText = "ZIP生成中...";
@@ -160,14 +171,13 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = "preBuild_split_videos.zip";
+            a.download = "preBuild_split.zip";
             a.click();
             status.style.color = "green";
             status.innerText = "完了しました";
 
         } catch (e) {
             console.error(e);
-            status.style.color = "red";
             status.innerText = "エラー: " + e.message;
         } finally {
             startBtn.disabled = false;
