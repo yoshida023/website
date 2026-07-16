@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TileCraft - APNG Generator</title>
+    <style>
+        /* ----------------------------------
+           基本スタイル・レイアウト
+           ---------------------------------- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #343a40;
+            color: #fff;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        main {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .screen {
+            display: none;
+        }
+        .screen.active {
+            display: block;
+        }
+
+        /* 共通ボタン */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            text-decoration: none;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; }
+
+        /* プロジェクトダッシュボード */
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .project-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .stamp-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stamp-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .stamp-card .thumb-preview {
+            height: 100px;
+            background: #e9ecef;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .stamp-card .thumb-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* エディタ画面レイアウト */
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) {
+            .editor-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* ワークスペース(左側) */
+        .workspace {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .preview-wrapper {
+            position: relative;
+            margin-bottom: 15px;
+        }
+        /* 透明グリッド背景 */
+        .transparent-bg {
+            background-color: #fff;
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc),
+                              linear-gradient(45deg, #ccc 25%, #fff 25%, #fff 75%, #ccc 75%, #ccc);
+            background-size: 16px 16px;
+            background-position: 0 0, 8px 8px;
+            border: 2px solid #ced4da;
+            border-radius: 4px;
+        }
+        /* デバッグ用背景カラーオーバーレイ */
+        .transparent-bg.debug-white { background-color: #ffffff; background-image: none; }
+        .transparent-bg.debug-black { background-color: #000000; background-image: none; }
+        
+        #main-canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        .preview-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        /* サイドバー(右側フレームリスト) */
+        .sidebar {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            max-height: 80vh;
+        }
+        .frame-list-container {
+            overflow-y: auto;
+            flex-grow: 1;
+            margin-bottom: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        .frame-item {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .frame-item.selected {
+            border-color: #007bff;
+            background-color: #e8f0fe;
+        }
+        .frame-item.disabled {
+            opacity: 0.5;
+        }
+        .action-btn {
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .action-btn:hover { background: #e0e0e0; }
+
+        /* インポートツールボックス */
+        .import-box {
+            background: #f1f3f5;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .import-box h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        /* 共通ローディングオーバーレイ */
+        #loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>TileCraft - APNG Generator</h1>
+        <div id="project-title-display" style="font-size: 14px; font-weight: bold;"></div>
+    </header>
+
+    <main>
+        <!-- ==========================================
+             1. プロジェクトメイン画面 (ダッシュボード)
+             ========================================== -->
+        <section id="project-screen" class="screen active">
+            <div class="project-header">
+                <div>
+                    <h2 style="margin: 0 0 5px 0;">スタンプパッケージ一覧</h2>
+                    <p style="margin: 0; color: #6c757d; font-size: 14px;">編集・追加するスタンプ、またはタブ画像を選択してください。</p>
+                </div>
+                <div class="project-actions">
+                    <!-- 追加: APNG一括出力ボタン -->
+                    <button class="btn btn-success" onclick="exportAllAPNGs()" style="font-size: 15px; padding: 12px 24px;">
+                        📦 全てのスタンプをAPNGで一括出力する
+                    </button>
+                </div>
+            </div>
+
+            <!-- スタンプグリッド配置エリア (動的生成) -->
+            <div class="grid-container" id="stamps-grid"></div>
+        </section>
+
+        <!-- ==========================================
+             2. APNGエディタ画面
+             ========================================== -->
+        <section id="editor-screen" class="screen">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 id="editor-title" style="margin: 0;">スタンプの編集</h2>
+                <div id="editor-global-actions" style="display: flex; gap: 10px; align-items: center;">
+                    <label for="loop-count-select" style="font-size: 14px; font-weight: bold;">再生ループ数:</label>
+                    <select id="loop-count-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;" onchange="handleLoopCountChange(this.value)">
+                        <option value="1">1回 (再生後停止)</option>
+                        <option value="2">2回</option>
+                        <option value="3">3回</option>
+                        <option value="4" selected>4回</option>
+                        <option value="0">無限ループ</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="editor-container">
+                <!-- ワークスペース (左カラム: プレビュー＆インポート) -->
+                <div class="workspace">
+                    <div class="preview-wrapper">
+                        <!-- 透明グリッドキャンバス -->
+                        <div id="preview-area" class="transparent-bg" style="width: 320px; height: 320px; display: flex; align-items: center; justify-content: center;">
+                            <canvas id="main-canvas" width="320" height="320"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="preview-controls">
+                        <button class="btn btn-secondary" onclick="togglePreview()" id="play-btn">▶ 再生 / 停止</button>
+                        <button class="btn btn-secondary" onclick="smartFill()">✨ コマのスマート補完</button>
+                    </div>
+
+                    <!-- 再生仕様とLINE規格ステータス表示 -->
+                    <div id="total-duration-display" style="width: 100%; max-width: 400px; margin-bottom: 20px;"></div>
+
+                    <!-- 各種インポートツールボックス -->
+                    <div style="width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="import-box" id="anim-controls">
+                            <h4>🎬 APNGファイルの取り込み</h4>
+                            <p style="font-size:11px; color:#6c757d; margin-top:-5px; margin-bottom:8px;">
+                                既存のAPNGを分解して全コマに展開します。
+                            </p>
+                            <input type="file" accept="image/png" onchange="handleApngImport(this)" style="width:100%; font-size:11px;">
+                        </div>
+
+                        <div class="import-box" id="tab-controls">
+                            <h4>🖼️ タブ用静止画登録</h4>
+                            <input type="file" accept="image/png, image/jpeg" onchange="loadSingle(0, this)" style="width:100%; font-size:11px;">
+                        </div>
+
+                        <div class="import-box">
+                            <h4>📂 連番画像の一括登録</h4>
+                            <p style="font-size:11px; color:#6c757d; margin-top:-5px; margin-bottom:8px;">
+                                複数の静止画(PNG/JPEG等)をファイル名順で自動充填。
+                            </p>
+                            <input type="file" accept="image/png, image/jpeg" multiple onchange="handleBulkUpload(this)" style="width:100%; font-size:11px;">
+                        </div>
+                    </div>
+
+                    <!-- アクションエリア -->
+                    <div class="editor-actions" style="margin-top: 25px; display: flex; gap: 12px; width: 100%; justify-content: flex-end; border-top: 1px solid #eee; padding-top: 15px;">
+                        <button class="btn btn-secondary" onclick="backToProject()">← 戻る</button>
+                        <!-- 追加: 個別APNG書き出しボタン -->
+                        <button class="btn btn-primary" onclick="exportSingleAPNG()" style="background-color: #28a745; border-color: #28a745;">
+                            💾 APNGを書き出す
+                        </button>
+                    </div>
+                </div>
+
+                <!-- サイドバー (右カラム: コマ・フレーム管理) -->
+                <div class="sidebar">
+                    <h3 style="margin: 0 0 10px 0; font-size: 16px; border-bottom: 2px solid #007bff; padding-bottom: 5px;">フレーム構成リスト</h3>
+                    <div id="frame-info-bar" style="font-size: 12px; color: #6c757d; margin-bottom: 10px; font-weight: bold;"></div>
+                    
+                    <div class="frame-list-container" id="frame-list">
+                        <!-- コマアイテムが動的にJSでレンダリングされます -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==========================================
+         3. ローディング・モーダル
+         ========================================== -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text">処理中...</div>
+    </div>
+
+    <!-- ==========================================
+         4. 依存ライブラリ & ロジックJSの読み込み
+         ========================================== -->
+    <!-- UPNG.js (APNGのデコードと、アルファチャンネルRGBAの保持に必須の外部モジュール) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.11/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+
+    <script>
+        // =================================------------------
+        // アプリケーションデータモデル(ダッシュボード管理・橋渡し)
+        // =================================------------------
+        
+        // 1. 各解像度・コマ数のLINE規格値
+        const CONFIG = {
+            'stamp': { w: 320, h: 270, maxF: 20 },
+            'main':  { w: 240, h: 240, maxF: 20 },
+            'tab':   { w: 96,  h: 74,  maxF: 1  }
+        };
+
+        // 2. 現在アクティブなスタンプ情報
+        let currentId = null;
+        let currentType = null; // 'stamp', 'main', 'tab'
+
+        // 3. プロジェクト初期ダミーデータ
+        const project = {
+            name: "My LINE Stamp Set",
+            stamps: {}
+        };
+
+        // 001〜008のメインスタンプ、スタンプメイン画像(main)、タブ画像(tab)の構造を空で用意
+        function initProjectData() {
+            // メインスタンプ 8個 (001〜008)
+            for (let i = 1; i <= 8; i++) {
+                const idStr = String(i).padStart(3, '0');
+                project.stamps[idStr] = createEmptyStamp('stamp');
+            }
+            // メイン画像 (W240 × H240)
+            project.stamps['main'] = createEmptyStamp('main');
+            // タブ画像 (W96 × H74)
+            project.stamps['tab'] = createEmptyStamp('tab');
+        }
+
+        function createEmptyStamp(type) {
+            const maxFrames = CONFIG[type].maxF;
+            return {
+                buffers: new Array(maxFrames).fill(null),
+                delays: new Array(maxFrames).fill(100),
+                enabled: new Array(maxFrames).fill(true),
+                debugBgs: new Array(maxFrames).fill('#ffffff'),
+                loopCount: (type === 'tab') ? 1 : 4
+            };
+        }
+
+        // =================================------------------
+        // UI操作・動的レンダリング
+        // =================================------------------
+
+        // ローディング表示の切り替え
+        function toggleLoading(show, text = "処理中...") {
+            const overlay = document.getElementById('loading-overlay');
+            const txtNode = document.getElementById('loading-text');
+            if (overlay) {
+                overlay.style.display = show ? 'flex' : 'none';
+                if (txtNode) txtNode.innerText = text;
+            }
+        }
+
+        // スタンプ一覧（ダッシュボード）のレンダリング
+        function renderStampsGrid() {
+            const grid = document.getElementById('stamps-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const keys = Object.keys(project.stamps);
+            keys.forEach(id => {
+                const sData = project.stamps[id];
+                const card = document.createElement('div');
+                card.className = 'stamp-card';
+                card.onclick = () => openEditor(id);
+
+                // サムネイルプレビュー (1コマ目を表示)
+                let previewHtml = '<span style="color:#adb5bd; font-size:12px;">NO DATA</span>';
+                const firstFrameIdx = sData.buffers.findIndex(b => b !== null);
+                
+                if (firstFrameIdx !== -1 && sData.buffers[firstFrameIdx]) {
+                    const width = (id === 'main') ? CONFIG['main'].w : ((id === 'tab') ? CONFIG['tab'].w : CONFIG['stamp'].w);
+                    const height = (id === 'main') ? CONFIG['main'].h : ((id === 'tab') ? CONFIG['tab'].h : CONFIG['stamp'].h);
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    const imgData = new ImageData(new Uint8ClampedArray(sData.buffers[firstFrameIdx]), width, height);
+                    ctx.putImageData(imgData, 0, 0);
+                    
+                    previewHtml = `<img src="${canvas.toDataURL()}" alt="${id}">`;
+                }
+
+                // ラベル名変換
+                let titleLabel = `No.${id}`;
+                if (id === 'main') titleLabel = 'メイン画像';
+                if (id === 'tab') titleLabel = 'タブ画像';
+
+                card.innerHTML = `
+                    <div class="thumb-preview transparent-bg">${previewHtml}</div>
+                    <div style="font-weight: bold; font-size: 14px;">${titleLabel}</div>
+                    <div style="font-size: 11px; color: #6c757d; margin-top: 4px;">
+                        ${id === 'tab' ? '静止画1枚' : `最大 ${CONFIG[id === 'main' ? 'main' : 'stamp'].maxF} コマ`}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // 初期ロード時処理
+        window.addEventListener('DOMContentLoaded', () => {
+            initProjectData();
+            renderStampsGrid();
+            
+            const titleDisplay = document.getElementById('project-title-display');
+            if (titleDisplay) {
+                titleDisplay.innerText = `プロジェクト: ${project.name}`;
+            }
+        });
+
+        // エディタを抜けてダッシュボードに戻る際に一覧を再読込する処理をオーバーライド
+        const originalBackToProject = window.backToProject;
+        window.backToProject = function() {
+            if (typeof originalBackToProject === 'function') {
+                originalBackToProject();
+            } else {
+                stopPreview();
+                document.getElementById('editor-screen').classList.remove('active');
+                document.getElementById('project-screen').classList.add('active');
+            }
+            renderStampsGrid(); // ダッシュボードをリフレッシュしてサムネイルを更新
+        };
+    </script>
+    
+    <!-- エディタ操作ロジックファイル (editor-logic.js) を最後にロード -->
+    <script src="editor-logic.js"></script>
+</body>
+</html>
