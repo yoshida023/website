@@ -52,7 +52,7 @@
   }
 
   .container {
-    max-width: 1200px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 0 20px 60px;
   }
@@ -85,41 +85,43 @@
     border-color: var(--line-green);
   }
 
-  /* レスポンシブグリッド */
+  /* 一覧形式（リスト風）レイアウト */
   .portfolio-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 24px;
-  }
-
-  /* カードデザイン */
-  .card {
-    background-color: var(--card-bg);
-    border-radius: 16px;
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
     display: flex;
     flex-direction: column;
-    position: relative;
+    gap: 16px;
+  }
+
+  /* 横長カードデザイン */
+  .card {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
   }
 
   .card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 20px -4px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.06);
   }
 
-  /* 画像エリア */
+  /* 左側：画像エリア */
   .card-img-wrap {
-    width: 100%;
-    aspect-ratio: 1 / 1;
+    width: 120px;
+    height: 120px;
+    min-width: 120px;
     background-color: #f8fafc;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 12px;
+    border-right: 1px solid var(--border-color);
+    flex-shrink: 0;
   }
 
   .card-img-wrap img {
@@ -128,19 +130,26 @@
     object-fit: contain;
   }
 
-  /* コンテンツエリア */
+  /* 右側：コンテンツエリア */
   .card-content {
-    padding: 16px;
+    padding: 16px 20px;
     flex-grow: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     justify-content: space-between;
+    gap: 16px;
+  }
+
+  .card-info {
+    flex-grow: 1;
+    min-width: 0; /* テキスト省略・はみ出し防止 */
   }
 
   .badge-group {
     display: flex;
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     flex-wrap: wrap;
   }
 
@@ -164,29 +173,40 @@
   }
 
   .card-title {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
-    margin: 0 0 4px 0;
+    margin: 0 0 2px 0;
     color: var(--text-main);
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .card-subtitle {
     font-size: 12px;
     color: var(--text-sub);
-    margin: 0 0 16px 0;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-action {
+    flex-shrink: 0;
   }
 
   .store-link {
-    display: block;
+    display: inline-block;
     background-color: var(--line-green);
     color: #ffffff;
     text-decoration: none;
     text-align: center;
-    padding: 10px;
+    padding: 10px 20px;
     border-radius: 8px;
     font-weight: 700;
     font-size: 13px;
+    white-space: nowrap;
     transition: background-color 0.2s;
   }
 
@@ -249,6 +269,37 @@
     font-weight: 600;
     padding: 0 4px;
   }
+
+  /* モバイル対応（画面幅が狭い場合） */
+  @media (max-width: 600px) {
+    .card-img-wrap {
+      width: 90px;
+      height: 90px;
+      min-width: 90px;
+      padding: 8px;
+    }
+
+    .card-content {
+      padding: 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .card-action {
+      width: 100%;
+    }
+
+    .store-link {
+      display: block;
+      width: 100%;
+      padding: 8px;
+    }
+
+    .card-title, .card-subtitle {
+      white-space: normal; /* モバイルでは改行を許可 */
+    }
+  }
 </style>
 </head>
 <body>
@@ -278,7 +329,7 @@
   let allProjects = [];
   let filteredProjects = [];
   let currentPage = 1;
-  const itemsPerPage = 12; // 1ページあたりの表示件数（必要に応じて調整可能）
+  const itemsPerPage = 10; // 一覧形式に合わせて1ページ10件に調整
 
   document.addEventListener('DOMContentLoaded', () => {
     Papa.parse('data.csv', {
@@ -313,13 +364,13 @@
     renderPagination(totalPages);
   }
 
-  // カード描画処理
+  // カード描画処理（一覧・横長形式）
   function renderCards(data) {
     const grid = document.getElementById('portfolio-grid');
     grid.innerHTML = '';
 
     if (data.length === 0) {
-      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-sub); padding: 40px;">該当するコンテンツがありません。</div>';
+      grid.innerHTML = '<div style="text-align: center; color: var(--text-sub); padding: 40px;">該当するコンテンツがありません。</div>';
       return;
     }
 
@@ -338,7 +389,7 @@
         if (base64) {
           imageSrc = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
         } else {
-          imageSrc = 'https://via.placeholder.com/300?text=No+Image';
+          imageSrc = 'https://via.placeholder.com/120?text=No+Image';
         }
       }
 
@@ -351,15 +402,17 @@
           <img src="${imageSrc}" alt="${jaTitle}" loading="lazy">
         </div>
         <div class="card-content">
-          <div>
+          <div class="card-info">
             <div class="badge-group">
               <span class="badge badge-type">${type.toUpperCase()}</span>
               ${isPremium ? '<span class="badge badge-premium">PREMIUM</span>' : ''}
             </div>
-            <h3 class="card-title">${jaTitle}</h3>
-            ${enTitle ? `<p class="card-subtitle">${enTitle}</p>` : ''}
+            <h3 class="card-title" title="${jaTitle}">${jaTitle}</h3>
+            ${enTitle ? `<p class="card-subtitle" title="${enTitle}">${enTitle}</p>` : ''}
           </div>
-          <a href="${url}" class="store-link" target="_blank" rel="noopener noreferrer">LINE STORE で見る</a>
+          <div class="card-action">
+            <a href="${url}" class="store-link" target="_blank" rel="noopener noreferrer">LINE STORE で見る</a>
+          </div>
         </div>
       `;
       grid.appendChild(card);
@@ -460,7 +513,7 @@
       });
     }
 
-    currentPage = 1; // フィルター変更時は1ページ目に戻す
+    currentPage = 1;
     renderPage();
   }
 </script>
