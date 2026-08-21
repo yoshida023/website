@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINE Digital Contents Portfolio</title>
+<!-- CSV解析用の軽量ライブラリ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --line-green: #06c755;
+    --line-green-hover: #05b34c;
+    --premium-gold: #eab308;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #0f172a;
+    --text-sub: #64748b;
+    --border-color: #e2e8f0;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+  }
+
+  header {
+    background-color: var(--card-bg);
+    padding: 40px 20px 30px;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 30px;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 26px;
+    color: var(--text-main);
+  }
+
+  header p {
+    margin: 8px 0 0;
+    color: var(--text-sub);
+    font-size: 14px;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+  }
+
+  /* フィルターボタン */
+  .filter-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-sub);
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-btn:hover,
+  .filter-btn.active {
+    background-color: var(--line-green);
+    color: #ffffff;
+    border-color: var(--line-green);
+  }
+
+  /* レスポンシブグリッド */
+  .portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+  }
+
+  /* カードデザイン */
+  .card {
+    background-color: var(--card-bg);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -4px rgba(0,0,0,0.08);
+  }
+
+  /* 画像エリア */
+  .card-img-wrap {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background-color: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .card-img-wrap img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  /* コンテンツエリア */
+  .card-content {
+    padding: 16px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .badge-group {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+
+  .badge-type {
+    background-color: #e2e8f0;
+    color: #475569;
+  }
+
+  .badge-premium {
+    background-color: #fef9c3;
+    color: #854d0e;
+    border: 1px solid #fef08a;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+    color: var(--text-main);
+    line-height: 1.4;
+  }
+
+  .card-subtitle {
+    font-size: 12px;
+    color: var(--text-sub);
+    margin: 0 0 16px 0;
+  }
+
+  .store-link {
+    display: block;
+    background-color: var(--line-green);
+    color: #ffffff;
+    text-decoration: none;
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    transition: background-color 0.2s;
+  }
+
+  .store-link:hover {
+    background-color: var(--line-green-hover);
+  }
+
+  #loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-sub);
+    font-size: 15px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LINE Digital Contents Portfolio</h1>
+  <p>スタンプ・絵文字・着せかえ一覧</p>
+</header>
+
+<div class="container">
+  <!-- フィルターボタン -->
+  <div class="filter-container">
+    <button class="filter-btn active" onclick="filterItems('all')">すべて</button>
+    <button class="filter-btn" onclick="filterItems('sticker')">スタンプ</button>
+    <button class="filter-btn" onclick="filterItems('emoji')">絵文字</button>
+    <button class="filter-btn" onclick="filterItems('theme')">着せかえ</button>
+  </div>
+
+  <div id="loading">データを読み込んでいます...</div>
+  <div class="portfolio-grid" id="portfolio-grid"></div>
+</div>
+
+<script>
+  let allProjects = [];
+
+  document.addEventListener('DOMContentLoaded', () => {
+    Papa.parse('data.csv', {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        document.getElementById('loading').style.display = 'none';
+        allProjects = results.data;
+        renderCards(allProjects);
+      },
+      error: function(error) {
+        document.getElementById('loading').innerHTML = 'データの読み込みに失敗しました。<br>ローカル環境の場合は Live Server などのローカルサーバー経由で開いてください。';
+        console.error('CSV Parsing Error:', error);
+      }
+    });
+  });
+
+  // カード描画処理
+  function renderCards(data) {
+    const grid = document.getElementById('portfolio-grid');
+    grid.innerHTML = '';
+
+    data.forEach(item => {
+      // ヘッダー名に対応したデータの取得
+      const jaTitle = item['日本語タイトル'] || item['英字タイトル'] || '無題';
+      const enTitle = item['英字タイトル'] || '';
+      const type = (item['type(sticker or emoji or theme)'] || item['type'] || 'sticker').toLowerCase();
+      const isPremium = String(item['Premium対象']).trim() === '1' || String(item['Premium対象']).toLowerCase() === 'true';
+      const url = item['URL'] || '#';
+      
+      // 画像ソースのフォールバック設定（画像URL優先、が無ければBase64を使用）
+      let imageSrc = item['画像URL'];
+      if (!imageSrc || imageSrc.trim() === '') {
+        const base64 = item['画像バイナリ(Base64)'];
+        if (base64) {
+          imageSrc = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+        } else {
+          imageSrc = 'https://via.placeholder.com/300?text=No+Image';
+        }
+      }
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.type = type;
+
+      card.innerHTML = `
+        <div class="card-img-wrap">
+          <img src="${imageSrc}" alt="${jaTitle}" loading="lazy">
+        </div>
+        <div class="card-content">
+          <div>
+            <div class="badge-group">
+              <span class="badge badge-type">${type.toUpperCase()}</span>
+              ${isPremium ? '<span class="badge badge-premium">PREMIUM</span>' : ''}
+            </div>
+            <h3 class="card-title">${jaTitle}</h3>
+            ${enTitle ? `<p class="card-subtitle">${enTitle}</p>` : ''}
+          </div>
+          <a href="${url}" class="store-link" target="_blank" rel="noopener noreferrer">LINE STORE で見る</a>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  // カテゴリ絞り込み処理
+  function filterItems(category) {
+    // ボタンの活性化状態を切り替え
+    const buttons = document.querySelectorAll('.filter-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    if (category === 'all') {
+      renderCards(allProjects);
+    } else {
+      const filtered = allProjects.filter(item => {
+        const type = (item['type(sticker or emoji or theme)'] || item['type'] || '').toLowerCase();
+        return type === category;
+      });
+      renderCards(filtered);
+    }
+  }
+</script>
+
+</body>
+</html>
