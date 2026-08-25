@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINE Digital Contents Portfolio</title>
+    <style>
+        :root {
+            --bg-color: #2F4F4F; /* 深緑系のダークトーン */
+            --header-bg: #F5F1E9; /* 温かみのあるオフホワイト */
+            --card-bg: #FEFEF2; /* 超淡いイエローベージュ（アイボリー） */
+            --text-main: #444444; /* ダークチャコール */
+            --text-sub: #A08C6E; /* オリーブブラウン */
+            --border-color: #D3D3D3; /* ライトグレー */
+            --btn-bg: #8DAF9E; /* セージグリーン */
+            --btn-hover: #9CB0A5; /* ホバー用の少し深いグリーン */
+            --accent-red: #BC544B; /* アクセント用の赤 */
+            --accent-gold: #EEDC82; /* プレミアム用のゴールド */
+            --badge-text: #6B4226; /* バッジ用焦げ茶 */
+            --toggle-base: #E0EBF0; /* トグル土台の淡いブルーグレー */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ヘッダーデザイン */
+        header {
+            background-color: var(--header-bg);
+            padding: 30px 20px 20px;
+            text-align: center;
+            border-bottom: 3px solid var(--border-color);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        /* 吉田スタジオ風のカメラロゴ (SVG) */
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            margin-bottom: 5px;
+        }
+
+        .logo-text {
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            color: var(--text-main);
+        }
+
+        header h1 {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--bg-color);
+            margin: 10px 0 5px;
+            letter-spacing: 0.05em;
+        }
+
+        /* メインコンテナ */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px 15px 60px;
+            text-align: center;
+        }
+
+        /* タグ・キャラクタ切り替えトグル */
+        .toggle-container {
+            display: inline-flex;
+            background-color: rgba(0, 0, 0, 0.25);
+            border-radius: 30px;
+            padding: 4px;
+            margin: 15px auto 25px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 8px 32px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .toggle-btn.active {
+            background-color: var(--card-bg);
+            color: var(--bg-color);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 動的コントロールエリア */
+        .control-area {
+            min-height: 80px;
+            margin-bottom: 15px;
+        }
+
+        /* タグボタンエリア */
+        .tag-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag-btn {
+            background-color: var(--header-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+        }
+
+        .tag-btn.active {
+            background-color: var(--card-bg);
+            color: var(--bg-color);
+            border-color: var(--card-bg);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        /* キャラクタカルーセル */
+        .carousel-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+
+        .carousel-track-container {
+            overflow: hidden;
+            width: 220px;
+        }
+
+        .carousel-track {
+            display: flex;
+            gap: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .carousel-item {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid var(--border-color);
+            background-color: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+
+        .carousel-item.active {
+            border-color: var(--btn-bg);
+            transform: scale(1.1);
+        }
+
+        .carousel-item .char-avatar {
+            font-size: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .carousel-arrow {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: var(--card-bg);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .carousel-arrow:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        /* キャラクタ情報カード */
+        .info-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin: 15px auto;
+            max-width: 450px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            border: 1px solid var(--border-color);
+            text-align: left;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .info-card .char-info-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid var(--btn-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #FFF;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .info-card .char-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-card .char-title-bar {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--bg-color);
+            margin-bottom: 2px;
+        }
+
+        .info-card .char-desc {
+            font-size: 12px;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+
+        /* ステータスバー（選択中のタグやキャラクター表示） */
+        .status-bar {
+            text-align: left;
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--card-bg);
+            margin: 15px auto;
+            max-width: 500px;
+            padding: 0 10px;
+        }
+
+        /* ポートフォリオカードグリッド */
+        .portfolio-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin: 15px auto;
+            max-width: 500px;
+        }
+
+        /* カードのベース設計 */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            text-align: left;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        /* カード右下のカメラ透かしマーク（SVGを埋め込み） */
+        .card::after {
+            content: "";
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            width: 70px;
+            height: 70px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none"><path d="M15 20H45V48H15V20Z" stroke="%23E0EBF0" stroke-width="2" stroke-linejoin="round"/><path d="M22 20V15H38V20" stroke="%23E0EBF0" stroke-width="2" stroke-linejoin="round"/><circle cx="30" cy="34" r="8" stroke="%23E0EBF0" stroke-width="2"/><circle cx="40" cy="25" r="2" fill="%23E0EBF0"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .card-img-wrap {
+            width: 120px;
+            height: 120px;
+            background-color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .card-img-wrap img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .card-content {
+            padding: 12px 16px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .badge-group {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #FFFFFF;
+            text-transform: uppercase;
+        }
+
+        .badge-sticker { background-color: var(--btn-hover); }
+        .badge-emoji { background-color: var(--accent-red); }
+        .badge-theme { background-color: var(--text-sub); }
+        
+        .badge-premium {
+            background-color: var(--accent-gold);
+            color: var(--text-dark);
+            border: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--text-main);
+            margin-bottom: 2px;
+        }
+
+        .card-subtitle {
+            font-size: 11px;
+            color: var(--text-sub);
+            margin-bottom: 8px;
+        }
+
+        /* LINE STOREを見るボタン */
+        .store-link {
+            display: inline-block;
+            background-color: var(--btn-bg);
+            color: #FFFFFF;
+            text-decoration: none;
+            text-align: center;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 12px;
+            transition: background-color 0.2s;
+            align-self: flex-start;
+            z-index: 2;
+        }
+
+        .store-link:hover {
+            background-color: var(--btn-hover);
+        }
+
+        /* ページネーション（画像3スタイル） */
+        .pagination-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        .pagination-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .page-btn {
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .page-btn:hover {
+            background-color: var(--header-bg);
+        }
+
+        .page-btn.active {
+            background-color: var(--toggle-base);
+            color: var(--bg-color);
+            border-color: var(--toggle-base);
+        }
+
+        /* フッター */
+        footer {
+            margin-top: 50px;
+            padding: 20px;
+            text-align: center;
+            background-color: var(--header-bg);
+            border-top: 1px solid var(--border-color);
+            font-size: 12px;
+            color: var(--text-main);
+            font-weight: bold;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ヘッダーエリア -->
+    <header>
+        <div class="logo-container">
+            <!-- インラインSVGカメラロゴ -->
+            <svg class="logo-icon" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 20H45V48H15V20Z" stroke="#444444" stroke-width="2.5" stroke-linejoin="round"/>
+                <path d="M22 20V15H38V20" stroke="#444444" stroke-width="2.5" stroke-linejoin="round"/>
+                <circle cx="30" cy="34" r="8" stroke="#444444" stroke-width="2.5"/>
+                <circle cx="40" cy="25" r="2" fill="#444444"/>
+                <path d="M20 12H40V15H20V12Z" fill="#444444"/>
+            </svg>
+            <div class="logo-text">ヨシダスタジオ</div>
+        </div>
+        <h1>LINE Digital Contents Portfolio</h1>
+    </header>
+
+    <div class="container">
+        <!-- タグ・キャラクタ切り替えトグルスイッチ -->
+        <div class="toggle-container">
+            <button class="toggle-btn active" id="btn-tag-mode" onclick="switchMode('tag')">タグ</button>
+            <button class="toggle-btn" id="btn-char-mode" onclick="switchMode('char')">キャラクタ</button>
+        </div>
+
+        <!-- コントロールエリア（タグ一覧 or キャラクタカルーセル） -->
+        <div class="control-area" id="control-area">
+            <!-- 初期状態はタグボタン表示 -->
+        </div>
+
+        <!-- ステータスバー -->
+        <div class="status-bar" id="status-bar">
+            タグ: 「すべて」 0作品
+        </div>
+
+        <!-- 作品カード一覧 -->
+        <div class="portfolio-grid" id="portfolio-grid">
+            <!-- 動的カード挿入エリア -->
+        </div>
+
+        <!-- ページネーションコントロール -->
+        <div class="pagination-container" id="pagination-container">
+            <!-- 動的ページネーションボタン -->
+        </div>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+        ©Yoshida Studio All Rights Reserved.
+    </footer>
+
+    <script>
+        // CSV列名定義
+        const KEY_ENG_TITLE = '英字タイトル';
+        const KEY_ENG_SHORT = '英字省略名';
+        const KEY_JPN_TITLE = '日本語タイトル';
+        const KEY_JPN_SHORT = '日本語省略名';
+        const KEY_PREMIUM = 'Premium対象';
+        const KEY_TYPE = 'type(sticker or emoji or theme)';
+        const KEY_URL = 'URL';
+        const KEY_IMG_URL = '画像URL';
+        const KEY_IMG_BASE64 = '画像バイナリ(Base64)';
+
+        // 1ページあたりの表示件数
+        const ITEMS_PER_PAGE = 10;
+
+        // グローバルステート
+        let allData = [];
+        let filteredData = [];
+        let currentMode = 'tag'; // 'tag' or 'char'
+        let currentTag = 'すべて';
+        let currentCharacter = 'あいつ';
+        let currentPage = 1;
+        let charIndexOffset = 0; // カルーセルのスクロール制御用
+
+        // キャラクター判定マッピング
+        const charDescriptions = {
+            'あいつ': '「あいつ」は吉田スタジオが描く、少しシュールで愛らしいオープンソースキャラクターです。',
+            'ちびうぱ': '「ちびうぱ」は、ウーパールーパーをモチーフにした、ゆるくて可愛い人気キャラクターです。',
+            'たいじろうズ': '「たいじろうズ」は、表情豊かで元気いっぱいの手描き風オリジナルキャラクターです。',
+            '宇宙ネコ': '「宇宙ネコ」は、宇宙を旅するちょっぴり不思議な猫ちゃんたちのファミリーです。',
+            'N氏': '「N氏」は、ゆるいタッチのイラストが魅力的な手描き風のネコキャラクターです。',
+            'ウニフラッシュ': '感情の高まりや強調表現にぴったりな、ユニークなウニフラッシュエフェクトシリーズです。',
+            'メェル': '「メェル」はウール100%のふわふわしたねむりの羊キャラクターです。',
+            'その他': '吉田スタジオの個性的で魅力的なLINEデジタルコンテンツ作品です。'
+        };
+
+        // キャラクターごとの可愛いアバター（絵文字アイコン）
+        const charAvatars = {
+            'あいつ': '👤',
+            'ちびうぱ': '👾',
+            'たいじろうズ': '🦁',
+            '宇宙ネコ': '🐱',
+            'N氏': '🐾',
+            'ウニフラッシュ': '💥',
+            'メェル': '🐑',
+            'その他': '🎨'
+        };
+
+        // CORS制限やCSV未ロード時のフォールバックデータ
+        const fallbackData = [
+            {
+                '英字タイトル': 'aitsu mecha-ugoku 2',
+                '英字省略名': 'aitsu mecha-ugoku 2',
+                '日本語タイトル': '【めちゃ動く】あいつ vol.2',
+                '日本語省略名': '【めちゃ動...vol.2',
+                'Premium対象': '0',
+                'type(sticker or emoji or theme)': 'emoji',
+                'URL': 'https://store.line.me/emojishop/product/6a7a8d008010714b9cc58699/ja',
+                '画像URL': 'https://stickershop.line-scdn.net/sticonshop/v1/product/6a7a8d008010714b9cc58699/iPhone/main.png?v=1',
+                '画像バイナリ(Base64)': ''
+            },
+            {
+                '英字タイトル': 'Cho-ugoku fukidashi',
+                '英字省略名': 'Cho-ugoku fukidashi',
+                '日本語タイトル': '【めちゃ動く】シンプル 日常ふきだし',
+                '日本語省略名': '【めちゃ動...常ふきだし',
+                'Premium対象': '1',
+                'type(sticker or emoji or theme)': 'sticker',
+                'URL': 'https://store.line.me/stickershop/product/35854684/ja',
+                '画像URL': 'https://stickershop.line-scdn.net/stickershop/v1/product/35854684/LINEStorePC/main.png?v=1',
+                '画像バイナリ(Base64)': ''
+            },
+            {
+                '英字タイトル': 'aitsu fukidashi',
+                '英字省略名': 'aitsu fukidashi',
+                '日本語タイトル': '【めちゃ動く】あいつ 日常ふきだし',
+                '日本語省略名': '【めちゃ動...常ふきだし',
+                'Premium対象': '0',
+                'type(sticker or emoji or theme)': 'sticker',
+                'URL': 'https://store.line.me/stickershop/product/35851455/ja',
+                '画像URL': 'https://stickershop.line-scdn.net/stickershop/v1/product/35851455/LINEStorePC/main.png?v=1',
+                '画像バイナリ(Base64)': ''
+            },
+            {
+                '英字タイトル': 'aitsu mecha-ugoku 1',
+                '英字省略名': 'aitsu mecha-ugoku 1',
+                '日本語タイトル': '【めちゃ動く】あいつ vol.1',
+                '日本語省略名': '【めちゃ動...vol.1',
+                'Premium対象': '0',
+                'type(sticker or emoji or theme)': 'emoji',
+                'URL': 'https://store.line.me/emojishop/product/6a72d6a9117a5b0a0e14496b/ja',
+                '画像URL': 'https://stickershop.line-scdn.net/sticonshop/v1/product/6a72d6a9117a5b0a0e14496b/iPhone/main.png?v=1',
+                '画像バイナリ(Base64)': ''
+            }
+        ];
+
+        // キャラクター判定
+        function getCharacterName(item) {
+            const jpTitle = item[KEY_JPN_TITLE] || '';
+            const enTitle = item[KEY_ENG_TITLE] || '';
+            const text = (jpTitle + ' ' + enTitle).toLowerCase();
+
+            if (text.includes('あいつ')) return 'あいつ';
+            if (text.includes('ちびうぱ') || text.includes('woopa')) return 'ちびうぱ';
+            if (text.includes('たいじろう') || text.includes('taijiro')) return 'たいじろうズ';
+            if (text.includes('宇宙ネコ') || text.includes('uchu-neko')) return '宇宙ネコ';
+            if (text.includes('n氏') || text.includes('cat n')) return 'N氏';
+            if (text.includes('ウニ') || text.includes('uni-fukidashi')) return 'ウニフラッシュ';
+            if (text.includes('メェル') || text.includes('melle')) return 'メェル';
+            return 'その他';
+        }
+
+        // CSVパーサー
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const result = [];
+            if (lines.length === 0) return result;
+            const headers = lines.split(',');
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                let row = [];
+                let inQuotes = false;
+                let entry = '';
+                for (let j = 0; j < lines[i].length; j++) {
+                    let char = lines[i][j];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        row.push(entry.trim());
+                        entry = '';
+                    } else {
+                        entry += char;
+                    }
+                }
+                row.push(entry.trim());
+                
+                if (row.length >= headers.length) {
+                    let obj = {};
+                    headers.forEach((header, index) => {
+                        obj[header.trim()] = row[index] ? row[index].replace(/^"|"$/g, '') : '';
+                    });
+                    result.push(obj);
+                }
+            }
+            return result;
+        }
+
+        // CSV読み込み
+        async function init() {
+            try {
+                const response = await fetch('data.csv');
+                if (!response.ok) throw new Error();
+                const text = await response.text();
+                allData = parseCSV(text);
+                if (allData.length === 0) allData = fallbackData;
+            } catch (e) {
+                console.warn("CSVの読み込みができなかったため、初期デモデータを使用します。");
+                allData = fallbackData;
+            }
+            switchMode('tag');
+        }
+
+        // 表示切替（タグ or キャラクタ）
+        function switchMode(mode) {
+            currentMode = mode;
+            currentPage = 1;
+            const btnTag = document.getElementById('btn-tag-mode');
+            const btnChar = document.getElementById('btn-char-mode');
+
+            if (mode === 'tag') {
+                btnTag.classList.add('active');
+                btnChar.classList.remove('active');
+                renderTagControls();
+                filterByTag(currentTag);
+            } else {
+                btnTag.classList.remove('active');
+                btnChar.classList.add('active');
+                renderCharControls();
+                filterByCharacter(currentCharacter);
+            }
+        }
+
+        // タグコントロール生成
+        function renderTagControls() {
+            const counts = { 'すべて': allData.length, 'スタンプ': 0, '絵文字': 0, '動くスタンプ': 0, '動く絵文字': 0, 'プレミアム': 0 };
+            
+            allData.forEach(item => {
+                const type = (item[KEY_TYPE] || '').toLowerCase();
+                const isPremium = item[KEY_PREMIUM] === '1';
+                const jpTitle = item[KEY_JPN_TITLE] || '';
+
+                if (type.includes('sticker') || type.includes('スタンプ')) {
+                    if (jpTitle.includes('動く')) {
+                        counts['動くスタンプ']++;
+                    } else {
+                        counts['スタンプ']++;
+                    }
+                } else if (type.includes('emoji') || type.includes('絵文字')) {
+                    if (jpTitle.includes('動く')) {
+                        counts['動く絵文字']++;
+                    } else {
+                        counts['絵文字']++;
+                    }
+                }
+                if (isPremium) {
+                    counts['プレミアム']++;
+                }
+            });
+
+            const controlArea = document.getElementById('control-area');
+            let html = '<div class="tag-container">';
+            const tags = ['すべて', 'スタンプ', '絵文字', '動くスタンプ', '動く絵文字', 'プレミアム'];
+            tags.forEach(t => {
+                const activeClass = t === currentTag ? 'active' : '';
+                html += `<button class="tag-btn ${activeClass}" onclick="filterByTag('${t}')">${t}(${counts[t]})</button>`;
+            });
+            html += '</div>';
+            controlArea.innerHTML = html;
+        }
+
+        // タグフィルタリング
+        function filterByTag(tag) {
+            currentTag = tag;
+            currentPage = 1;
+            document.querySelectorAll('.tag-btn').forEach(btn => {
+                if (btn.innerText.startsWith(tag)) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            if (tag === 'すべて') {
+                filteredData = allData;
+            } else if (tag === 'プレミアム') {
+                filteredData = allData.filter(item => item[KEY_PREMIUM] === '1');
+            } else {
+                filteredData = allData.filter(item => {
+                    const type = (item[KEY_TYPE] || '').toLowerCase();
+                    const jpTitle = item[KEY_JPN_TITLE] || '';
+                    if (tag === '動くスタンプ') return (type.includes('sticker') && jpTitle.includes('動く'));
+                    if (tag === 'スタンプ') return (type.includes('sticker') && !jpTitle.includes('動く'));
+                    if (tag === '動く絵文字') return (type.includes('emoji') && jpTitle.includes('動く'));
+                    if (tag === '絵文字') return (type.includes('emoji') && !jpTitle.includes('動く'));
+                    return false;
+                });
+            }
+
+            document.getElementById('status-bar').innerText = `タグ: 「${tag}」 ${filteredData.length}作品`;
+            renderGrid();
+        }
+
+        // キャラクターコントロール（カルーセル等）生成
+        function renderCharControls() {
+            const chars = ['あいつ', 'ちびうぱ', 'たいじろうズ', '宇宙ネコ', 'N氏', 'ウニフラッシュ', 'メェル', 'その他'];
+            const controlArea = document.getElementById('control-area');
+            
+            let html = `
+                <div class="carousel-container">
+                    <button class="carousel-arrow" onclick="scrollCarousel(-1)">◀</button>
+                    <div class="carousel-track-container">
+                        <div class="carousel-track" id="carousel-track">`;
+            
+            chars.forEach(c => {
+                const activeClass = c === currentCharacter ? 'active' : '';
+                html += `
+                    <div class="carousel-item ${activeClass}" onclick="filterByCharacter('${c}')" data-char="${c}">
+                        <div class="char-avatar">${charAvatars[c] || '👤'}</div>
+                    </div>`;
+            });
+
+            html += `
+                        </div>
+                    </div>
+                    <button class="carousel-arrow" onclick="scrollCarousel(1)">▶</button>
+                </div>
+                <div id="char-info-container"></div>`;
+            
+            controlArea.innerHTML = html;
+            updateCharInfoCard();
+        }
+
+        // カルーセルスクロール
+        function scrollCarousel(direction) {
+            const track = document.getElementById('carousel-track');
+            const items = document.querySelectorAll('.carousel-item');
+            charIndexOffset = Math.max(0, Math.min(items.length - 3, charIndexOffset + direction));
+            track.style.transform = `translateX(-${charIndexOffset * 72}px)`;
+        }
+
+        // キャラクター情報カードの更新
+        function updateCharInfoCard() {
+            const count = allData.filter(item => getCharacterName(item) === currentCharacter).length;
+            const container = document.getElementById('char-info-container');
+            container.innerHTML = `
+                <div class="info-card">
+                    <div class="char-info-avatar">${charAvatars[currentCharacter] || '👤'}</div>
+                    <div class="char-details">
+                        <div class="char-title-bar">キャラクタ: 「${currentCharacter}」 ${count}作品</div>
+                        <div class="char-desc">${charDescriptions[currentCharacter] || ''}</div>
+                    </div>
+                </div>`;
+        }
+
+        // キャラクターフィルタリング
+        function filterByCharacter(char) {
+            currentCharacter = char;
+            currentPage = 1;
+            document.querySelectorAll('.carousel-item').forEach(item => {
+                if (item.getAttribute('data-char') === char) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+
+            filteredData = allData.filter(item => getCharacterName(item) === char);
+            document.getElementById('status-bar').innerText = `キャラクタ: 「${char}」 ${filteredData.length}作品`;
+            updateCharInfoCard();
+            renderGrid();
+        }
+
+        // ポートフォリオカード一覧の描画
+        function renderGrid() {
+            const grid = document.getElementById('portfolio-grid');
+            grid.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                grid.innerHTML = '<div style="color: #FEFEF2; margin: 30px 0;">該当する作品が見つかりませんでした。</div>';
+                document.getElementById('pagination-container').innerHTML = '';
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredData.length);
+            const pageItems = filteredData.slice(startIndex, endIndex);
+
+            pageItems.forEach(item => {
+                const type = (item[KEY_TYPE] || '').toLowerCase();
+                let typeText = 'スタンプ';
+                let badgeClass = 'badge-sticker';
+
+                if (type.includes('emoji')) {
+                    typeText = '絵文字';
+                    badgeClass = 'badge-emoji';
+                } else if (type.includes('theme')) {
+                    typeText = '着せ替え';
+                    badgeClass = 'badge-theme';
+                }
+
+                if (item[KEY_JPN_TITLE].includes('動く')) {
+                    typeText = '動く' + typeText;
+                }
+
+                const isPremium = item[KEY_PREMIUM] === '1';
+                const premiumBadgeHtml = isPremium ? '<span class="badge badge-premium">Premium対象</span>' : '';
+                
+                // 画像ソースの決定（Base64優先、無ければ画像URL）
+                const imgSrc = item[KEY_IMG_BASE64] && item[KEY_IMG_BASE64].startsWith('data:image') 
+                    ? item[KEY_IMG_BASE64] 
+                    : item[KEY_IMG_URL];
+
+                const cardHtml = `
+                    <div class="card">
+                        <div class="card-img-wrap">
+                            <img src="${imgSrc}" alt="${item[KEY_JPN_TITLE]}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\' fill=\'%238DAF9E\'><circle cx=\'50\' cy=\'50\' r=\'40\'/></svg>'">
+                        </div>
+                        <div class="card-content">
+                            <div class="badge-group">
+                                <span class="badge ${badgeClass}">${typeText}</span>
+                                ${premiumBadgeHtml}
+                            </div>
+                            <div class="card-title">${item[KEY_JPN_TITLE]}</div>
+                            <div class="card-subtitle">${item[KEY_ENG_TITLE]}</div>
+                            <a href="${item[KEY_URL]}" target="_blank" class="store-link">LINE STOREで見る</a>
+                        </div>
+                    </div>`;
+                grid.innerHTML += cardHtml;
+            });
+
+            renderPagination();
+        }
+
+        // ページネーションコントロールの描画
+        function renderPagination() {
+            const container = document.getElementById('pagination-container');
+            container.innerHTML = '';
+
+            const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+            if (totalPages <= 1) return;
+
+            let html = '<div class="pagination-row">';
+            
+            // 最初へ / 前へボタン
+            html += `<button class="page-btn" onclick="changePage(1)" ${currentPage === 1 ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>« 最初へ</button>`;
+            html += `<button class="page-btn" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>‹ 前へ</button>`;
+
+            // ページ番号ボタン（前後2ページを表示するロジック）
+            let startPage = Math.max(1, currentPage - 1);
+            let endPage = Math.min(totalPages, startPage + 2);
+            if (endPage - startPage < 2) {
+                startPage = Math.max(1, endPage - 2);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span style="color:#FEFEF2; padding:0 4px;">...</span>';
+                html += `<button class="page-btn" onclick="changePage(${totalPages})">${totalPages}</button>`;
+            }
+
+            // 次へ / 最後へボタン
+            html += `<button class="page-btn" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>次へ ›</button>`;
+            html += `<button class="page-btn" onclick="changePage(${totalPages})" ${currentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>最後へ »</button>`;
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            renderGrid();
+            // スムーズスクロールでヘッダー付近へ戻す
+            window.scrollTo({ top: 120, behavior: 'smooth' });
+        }
+
+        // アプリ起動
+        window.onload = init;
+    </script>
+</body>
+</html>
