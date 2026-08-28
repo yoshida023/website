@@ -558,6 +558,25 @@
             imgElement.parentNode.insertBefore(svgFallback, imgElement);
         }
 
+        // サムネイル画像エラー時の安全なフォールバック処理
+        function handleImgError(imgElement) {
+            imgElement.onerror = null;
+            imgElement.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="%238DAF9E"><circle cx="50" cy="50" r="40"/></svg>';
+        }
+
+        // 画像URL / Base64 の優先順位付き取得ロジック
+        function getImgSrc(item) {
+            if (item._imgBase64 && item._imgBase64.trim()) {
+                const b64 = item._imgBase64.trim();
+                if (b64.startsWith('data:image')) return b64;
+                return `data:image/png;base64,${b64}`;
+            }
+            if (item._imgUrl && item._imgUrl.trim()) {
+                return item._imgUrl.trim();
+            }
+            return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="%238DAF9E"><circle cx="50" cy="50" r="40"/></svg>';
+        }
+
         // CSVパーサー（列名や揺らぎに強い自動正規化）
         function parseCSV(text) {
             const cleanText = text.replace(/^\uFEFF/, '');
@@ -567,21 +586,27 @@
 
             const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
-            // カラム名の自動検出
+            // カラム名の自動検出（相互にキーワードが含まれるか柔軟に判定）
             const findHeader = (keywords, defaultKey) => {
-                const found = headers.find(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+                const found = headers.find(h => {
+                    const hLower = h.toLowerCase();
+                    return keywords.some(k => {
+                        const kLower = k.toLowerCase();
+                        return hLower.includes(kLower) || kLower.includes(hLower);
+                    });
+                });
                 return found || defaultKey;
             };
 
-            const keyEngTitle = findHeader(['英字タイトル', 'eng_title'], '英字タイトル');
-            const keyJpnTitle = findHeader(['日本語タイトル', 'jpn_title', 'タイトル'], '日本語タイトル');
-            const keyPremium = findHeader(['Premium', 'プレミアム'], 'Premium対象');
+            const keyEngTitle = findHeader(['英字タイトル', 'eng_title', 'eng'], '英字タイトル');
+            const keyJpnTitle = findHeader(['日本語タイトル', 'jpn_title', 'タイトル', 'title'], '日本語タイトル');
+            const keyPremium = findHeader(['Premium', 'プレミアム', 'premium'], 'Premium対象');
             const keyType = findHeader(['type', 'タイプ', '種別'], 'type(sticker or emoji or theme)');
-            const keyUrl = findHeader(['URL'], 'URL');
-            const keyImgUrl = findHeader(['画像URL', 'img_url'], '画像URL');
-            const keyImgBase64 = findHeader(['画像バイナリ', 'base64'], '画像バイナリ(Base64)');
-            const keyCharacter = findHeader(['キャラクター', 'キャラ', 'character'], 'キャラクター');
-            const keyTags = findHeader(['タグ', 'tag'], 'タグ');
+            const keyUrl = findHeader(['store_url', 'URL', 'url', 'link'], 'URL');
+            const keyImgUrl = findHeader(['画像URL', 'img_url', '画像', 'サムネイル', 'image', 'img', 'thumb'], '画像URL');
+            const keyImgBase64 = findHeader(['画像バイナリ', 'base64', 'binary', 'b64'], '画像バイナリ(Base64)');
+            const keyCharacter = findHeader(['キャラクター', 'キャラ', 'character', 'char'], 'キャラクター');
+            const keyTags = findHeader(['タグ', 'tag', 'tags'], 'タグ');
 
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
@@ -601,7 +626,7 @@
                 }
                 row.push(entry.trim());
 
-                if (row.length >= headers.length) {
+                if (row.length >= 1) {
                     let obj = {};
                     headers.forEach((header, index) => {
                         obj[header] = row[index] ? row[index].replace(/^"|"$/g, '') : '';
@@ -820,7 +845,7 @@
             container.innerHTML = `<span class="char-avatar-fallback">${fallbackAvatars[charName] || '👤'}</span>`;
         }
 
-        // キャラクターフィルタリング処理（判定ロジック強化版）
+        // キャラクターフィルタリング処理
         function filterByCharacter(char) {
             currentCharacter = char;
             currentPage = 1;
@@ -892,14 +917,12 @@
                 const isPremium = item._premium === '1';
                 const premiumBadgeHtml = isPremium ? '<span class="badge badge-premium">Premium対象</span>' : '';
                 
-                const imgSrc = item._imgBase64 && item._imgBase64.startsWith('data:image') 
-                    ? item._imgBase64 
-                    : item._imgUrl;
+                const imgSrc = getImgSrc(item);
 
                 const cardHtml = `
                     <div class="card">
                         <div class="card-img-wrap">
-                            <img src="${imgSrc}" alt="${escapeHtml(item._jpnTitle)}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\' fill=\'%238DAF9E\'><circle cx=\'50\' cy=\'50\' r=\'40\'/></svg>'">
+                            <img src="${imgSrc}" alt="${escapeHtml(item._jpnTitle)}" onerror="handleImgError(this)">
                         </div>
                         <div class="card-content">
                             <div class="badge-group">
