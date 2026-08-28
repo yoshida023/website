@@ -34,52 +34,45 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* ヘッダーデザイン（看板画像・ロゴ画像対応） */
+        /* 固定ヘッダーデザイン */
         header {
+            position: sticky;
             top: 0;
             left: 0;
             width: 100%;
-            height: 180px;
+            height: 150px;
             text-align: center;
             background-color: var(--header-bg);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
         }
 
         .logo-container {
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: 10px;
-            padding-top: 15px;
+            margin-bottom: 5px;
+            padding-top: 12px;
         }
 
-        /* 本番用のロゴ画像。存在しない場合は代替表示（alt）またはインラインSVGをフォールバック */
         .logo-image {
             max-width: 150px;
-            max-height: 60px;
+            max-height: 55px;
             object-fit: contain;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
 
-        /* ロゴ画像読み込み失敗時のデフォルトSVGカメラアイコン */
         .logo-icon-fallback {
-            width: 50px;
-            height: 50px;
-            margin-bottom: 5px;
-        }
-
-        .logo-text {
-            font-size: 14px;
-            font-weight: bold;
-            letter-spacing: 0.1em;
-            color: var(--text-main);
+            width: 45px;
+            height: 45px;
+            margin-bottom: 4px;
         }
 
         header h1 {
-            font-size: 26px;
+            font-size: 22px;
             font-weight: 800;
             color: var(--bg-color);
-            margin: 5px 0;
+            margin: 2px 0;
             letter-spacing: 0.05em;
         }
 
@@ -97,7 +90,7 @@
             background-color: rgba(0, 0, 0, 0.25);
             border-radius: 30px;
             padding: 4px;
-            margin: 15px auto 25px;
+            margin: 10px auto 20px;
             box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
         }
 
@@ -164,7 +157,7 @@
 
         .carousel-track-container {
             overflow: hidden;
-            width: 220px; /* 3個のアバターを綺麗に表示（60px + 隙間） */
+            width: 220px;
         }
 
         .carousel-track {
@@ -194,14 +187,12 @@
             transform: scale(1.1);
         }
 
-        /* JSONで指定された本番用アニメーションGIFを丸く表示 */
         .carousel-item .char-avatar-img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        /* アニメーションGIFのロード失敗時用フォールバック絵文字 */
         .carousel-item .char-avatar-fallback {
             font-size: 26px;
             display: flex;
@@ -288,7 +279,7 @@
             line-height: 1.4;
         }
 
-        /* ステータスバー（選択中のタグやキャラクター表示） */
+        /* ステータスバー */
         .status-bar {
             text-align: left;
             font-size: 16px;
@@ -308,7 +299,6 @@
             max-width: 500px;
         }
 
-        /* カードのベース設計 */
         .card {
             background-color: var(--card-bg);
             border-radius: 16px;
@@ -326,7 +316,6 @@
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
         }
 
-        /* カード右下の透かしマーク */
         .card::after {
             content: "";
             position: absolute;
@@ -407,7 +396,6 @@
             margin-bottom: 8px;
         }
 
-        /* LINE STOREを見るボタン */
         .store-link {
             display: inline-block;
             background-color: var(--btn-bg);
@@ -467,7 +455,6 @@
             border-color: var(--toggle-base);
         }
 
-        /* フッター */
         footer {
             margin-top: 50px;
             padding: 20px;
@@ -487,7 +474,7 @@
 </head>
 <body>
 
-    <!-- ヘッダーエリア -->
+    <!-- 固定ヘッダーエリア -->
     <header>
         <div class="logo-container">
             <img src="images/header-logo.png" alt="ヨシダスタジオ" class="logo-image" onerror="showFallbackLogo(this)">
@@ -502,10 +489,8 @@
             <button class="toggle-btn" id="btn-char-mode" onclick="switchMode('char')">キャラクタ</button>
         </div>
 
-        <!-- コントロールエリア（タグ一覧 or キャラクタカルーセル） -->
-        <div class="control-area" id="control-area">
-            <!-- 動的ロード挿入 -->
-        </div>
+        <!-- コントロールエリア -->
+        <div class="control-area" id="control-area"></div>
 
         <!-- ステータスバー -->
         <div class="status-bar" id="status-bar">
@@ -513,37 +498,19 @@
         </div>
 
         <!-- 作品カード一覧 -->
-        <div class="portfolio-grid" id="portfolio-grid">
-            <!-- 動的カード挿入エリア -->
-        </div>
+        <div class="portfolio-grid" id="portfolio-grid"></div>
 
-        <!-- ページネーションコントロール -->
-        <div class="pagination-container" id="pagination-container">
-            <!-- 動的ページネーションボタン -->
-        </div>
+        <!-- ページネーション -->
+        <div class="pagination-container" id="pagination-container"></div>
     </div>
 
-    <!-- フッター -->
     <footer>
         ©Yoshida Studio All Rights Reserved.
     </footer>
 
     <script>
-        // CSV列名定義
-        const KEY_ENG_TITLE = '英字タイトル';
-        const KEY_ENG_SHORT = '英字省略名';
-        const KEY_JPN_TITLE = '日本語タイトル';
-        const KEY_JPN_SHORT = '日本語省略名';
-        const KEY_PREMIUM = 'Premium対象';
-        const KEY_TYPE = 'type(sticker or emoji or theme)';
-        const KEY_URL = 'URL';
-        const KEY_IMG_URL = '画像URL';
-        const KEY_IMG_BASE64 = '画像バイナリ(Base64)';
-        const KEY_CHARACTER = 'キャラクター';
-        const KEY_TAGS = 'タグ';
-
-        // 1ページあたりの表示件数
-        const ITEMS_PER_PAGE = 3;
+        // 1ページあたりの表示件数を20個に設定
+        const ITEMS_PER_PAGE = 20;
 
         // グローバルステート
         let allData = [];
@@ -566,6 +533,16 @@
             'その他': '🎨'
         };
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         function showFallbackLogo(imgElement) {
             imgElement.style.display = 'none';
             const svgFallback = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -577,22 +554,35 @@
                 <path d="M22 20V15H38V20" stroke="#444444" stroke-width="2.5" stroke-linejoin="round"/>
                 <circle cx="30" cy="34" r="8" stroke="#444444" stroke-width="2.5"/>
                 <circle cx="40" cy="25" r="2" fill="#444444"/>
-                <path d="M20 12H40V15H20V12Z" fill="#444444"/>
             `;
             imgElement.parentNode.insertBefore(svgFallback, imgElement);
         }
 
-        // CSVパーサー（修正版）
+        // CSVパーサー（列名や揺らぎに強い自動正規化）
         function parseCSV(text) {
-            // BOM（\uFEFF）の除去処理を追加
             const cleanText = text.replace(/^\uFEFF/, '');
             const lines = cleanText.split(/\r?\n/);
             const result = [];
             if (lines.length === 0) return result;
 
-            // ヘッダー行を取得してクォートを除去
             const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-            
+
+            // カラム名の自動検出
+            const findHeader = (keywords, defaultKey) => {
+                const found = headers.find(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+                return found || defaultKey;
+            };
+
+            const keyEngTitle = findHeader(['英字タイトル', 'eng_title'], '英字タイトル');
+            const keyJpnTitle = findHeader(['日本語タイトル', 'jpn_title', 'タイトル'], '日本語タイトル');
+            const keyPremium = findHeader(['Premium', 'プレミアム'], 'Premium対象');
+            const keyType = findHeader(['type', 'タイプ', '種別'], 'type(sticker or emoji or theme)');
+            const keyUrl = findHeader(['URL'], 'URL');
+            const keyImgUrl = findHeader(['画像URL', 'img_url'], '画像URL');
+            const keyImgBase64 = findHeader(['画像バイナリ', 'base64'], '画像バイナリ(Base64)');
+            const keyCharacter = findHeader(['キャラクター', 'キャラ', 'character'], 'キャラクター');
+            const keyTags = findHeader(['タグ', 'tag'], 'タグ');
+
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
                 let row = [];
@@ -610,17 +600,26 @@
                     }
                 }
                 row.push(entry.trim());
-                
+
                 if (row.length >= headers.length) {
                     let obj = {};
                     headers.forEach((header, index) => {
                         obj[header] = row[index] ? row[index].replace(/^"|"$/g, '') : '';
                     });
-                    
-                    const tagString = obj[KEY_TAGS] || '';
+
+                    const tagString = obj[keyTags] || '';
                     obj.parsedTags = tagString ? tagString.split('|').map(t => t.trim()) : [];
-                    obj.charGroup = obj[KEY_CHARACTER] || 'その他';
-                    
+                    obj.charGroup = (obj[keyCharacter] || 'その他').trim();
+
+                    // アクセス用標準プロパティの割り当て
+                    obj._engTitle = obj[keyEngTitle] || '';
+                    obj._jpnTitle = obj[keyJpnTitle] || '';
+                    obj._premium = obj[keyPremium] || '0';
+                    obj._type = obj[keyType] || '';
+                    obj._url = obj[keyUrl] || '#';
+                    obj._imgUrl = obj[keyImgUrl] || '';
+                    obj._imgBase64 = obj[keyImgBase64] || '';
+
                     result.push(obj);
                 }
             }
@@ -633,10 +632,9 @@
                 if (charResponse.ok) {
                     characterMap = await charResponse.json();
                 } else {
-                    throw new Error("JSONロードに失敗しました");
+                    throw new Error("JSONロード失敗");
                 }
             } catch (e) {
-                console.warn("characters.jsonの読み込みに失敗したためフォールバックデータを使用します。");
                 characterMap = [
                     { "id": "chibiupa", "name": "ちびうぱ", "avatar_url": "images/avatar-chibiwoopa.gif", "description": "「ちびうぱ」は、ウーパールーパーをモチーフにしたキャラクターです。" },
                     { "id": "taijiros", "name": "たいじろうズ", "avatar_url": "images/avatar-taijiros.gif", "description": "「たいじろうズ」は、元気いっぱいな手描きオリジナルキャラクターです。" },
@@ -646,7 +644,6 @@
             }
 
             try {
-                // 先ほどのPythonスクリプトの標準出力名(line_items_latest.csv)またはdata.csvに対応
                 let csvResponse = await fetch('data.csv');
                 if (!csvResponse.ok) {
                     csvResponse = await fetch('line_items_latest.csv');
@@ -656,30 +653,24 @@
                     const text = await csvResponse.text();
                     allData = parseCSV(text);
                 } else {
-                    throw new Error("CSVロードに失敗しました");
+                    throw new Error("CSVロード失敗");
                 }
             } catch (e) {
-                console.warn("CSVの読み込みに失敗しました。フォールバックデータを使用します。");
                 allData = [
                     {
-                        '英字タイトル': 'aitsu mecha-ugoku 2',
-                        '英字省略名': 'aitsu mecha-ugoku 2',
-                        '日本語タイトル': '【めちゃ動く】あいつ vol.2',
-                        '日本語省略名': '【めちゃ動...vol.2',
-                        'Premium対象': '0',
-                        'type(sticker or emoji or theme)': 'emoji',
-                        'URL': 'https://store.line.me/emojishop/product/6a7a8d008010714b9cc58699/ja',
-                        '画像URL': 'https://stickershop.line-scdn.net/sticonshop/v1/product/6a7a8d008010714b9cc58699/iPhone/main.png?v=1',
-                        '画像バイナリ(Base64)': '',
-                        'キャラクター': 'あいつ',
-                        'タグ': '絵文字|動く絵文字',
+                        '_engTitle': 'aitsu mecha-ugoku 2',
+                        '_jpnTitle': '【めちゃ動く】あいつ vol.2',
+                        '_premium': '0',
+                        '_type': 'emoji',
+                        '_url': 'https://store.line.me/emojishop/product/6a7a8d008010714b9cc58699/ja',
+                        '_imgUrl': 'https://stickershop.line-scdn.net/sticonshop/v1/product/6a7a8d008010714b9cc58699/iPhone/main.png?v=1',
+                        '_imgBase64': '',
                         'parsedTags': ['絵文字', '動く絵文字'],
                         'charGroup': 'あいつ'
                     }
                 ];
             }
 
-            // 初期選択キャラクターの設定（修正版）
             if (characterMap.length > 0) {
                 currentCharacter = characterMap[0].name;
             } else {
@@ -727,7 +718,7 @@
             const tags = Object.keys(counts);
             tags.forEach(t => {
                 const activeClass = t === currentTag ? 'active' : '';
-                html += `<button class="tag-btn ${activeClass}" onclick="filterByTag('${t}')">${t}(${counts[t]})</button>`;
+                html += `<button class="tag-btn ${activeClass}" onclick="filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}(${counts[t]})</button>`;
             });
             html += '</div>';
             controlArea.innerHTML = html;
@@ -762,10 +753,10 @@
             
             characterMap.forEach(c => {
                 const activeClass = c.name === currentCharacter ? 'active' : '';
-                let avatarHtml = `<img src="${c.avatar_url}" alt="${c.name}" class="char-avatar-img" onerror="fallbackAvatarImage(this, '${c.name}')">`;
+                let avatarHtml = `<img src="${c.avatar_url}" alt="${escapeHtml(c.name)}" class="char-avatar-img" onerror="fallbackAvatarImage(this, '${escapeHtml(c.name)}')">`;
                 
                 html += `
-                    <div class="carousel-item ${activeClass}" onclick="filterByCharacter('${c.name}')" data-char="${c.name}">
+                    <div class="carousel-item ${activeClass}" data-char="${escapeHtml(c.name)}" onclick="onCharSelect(this)">
                         ${avatarHtml}
                     </div>`;
             });
@@ -781,6 +772,11 @@
             updateCharInfoCard();
         }
 
+        function onCharSelect(elem) {
+            const charName = elem.getAttribute('data-char');
+            filterByCharacter(charName);
+        }
+
         function fallbackAvatarImage(imgElement, charName) {
             const container = imgElement.parentNode;
             container.innerHTML = `<div class="char-avatar-fallback">${fallbackAvatars[charName] || '👤'}</div>`;
@@ -794,13 +790,18 @@
         }
 
         function updateCharInfoCard() {
-            const count = allData.filter(item => item.charGroup === currentCharacter).length;
+            const targetChar = (currentCharacter || '').trim().toLowerCase();
+            const count = allData.filter(item => {
+                const itemChar = (item.charGroup || '').trim().toLowerCase();
+                return itemChar === targetChar || itemChar.includes(targetChar) || targetChar.includes(itemChar);
+            }).length;
+
             const container = document.getElementById('char-info-container');
             if (!container) return;
 
-            const charDef = characterMap.find(c => c.name === currentCharacter) || { name: currentCharacter, description: "吉田スタジオのコンテンツ作品です。", avatar_url: "" };
+            const charDef = characterMap.find(c => (c.name || '').trim().toLowerCase() === targetChar) || { name: currentCharacter, description: "吉田スタジオのコンテンツ作品です。", avatar_url: "" };
 
-            let avatarHtml = `<img src="${charDef.avatar_url}" alt="${charDef.name}" onerror="fallbackCardAvatar(this, '${charDef.name}')">`;
+            let avatarHtml = `<img src="${charDef.avatar_url}" alt="${escapeHtml(charDef.name)}" onerror="fallbackCardAvatar(this, '${escapeHtml(charDef.name)}')">`;
 
             container.innerHTML = `
                 <div class="info-card">
@@ -808,8 +809,8 @@
                         ${avatarHtml}
                     </div>
                     <div class="char-details">
-                        <div class="char-title-bar">キャラクタ: 「${charDef.name}」 ${count}作品</div>
-                        <div class="char-desc">${charDef.description}</div>
+                        <div class="char-title-bar">キャラクタ: 「${escapeHtml(charDef.name)}」 ${count}作品</div>
+                        <div class="char-desc">${escapeHtml(charDef.description)}</div>
                     </div>
                 </div>`;
         }
@@ -819,16 +820,31 @@
             container.innerHTML = `<span class="char-avatar-fallback">${fallbackAvatars[charName] || '👤'}</span>`;
         }
 
+        // キャラクターフィルタリング処理（判定ロジック強化版）
         function filterByCharacter(char) {
             currentCharacter = char;
             currentPage = 1;
+
             document.querySelectorAll('.carousel-item').forEach(item => {
-                if (item.getAttribute('data-char') === char) item.classList.add('active');
-                else item.classList.remove('active');
+                if (item.getAttribute('data-char') === char) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
             });
 
-            filteredData = allData.filter(item => item.charGroup === char);
-            document.getElementById('status-bar').innerText = `キャラクタ: 「${char}」 ${filteredData.length}作品`;
+            const target = (char || '').trim().toLowerCase();
+            filteredData = allData.filter(item => {
+                const itemChar = (item.charGroup || '').trim().toLowerCase();
+                if (!itemChar || !target) return false;
+                return itemChar === target || itemChar.includes(target) || target.includes(itemChar);
+            });
+
+            const statusBar = document.getElementById('status-bar');
+            if (statusBar) {
+                statusBar.innerText = `キャラクタ: 「${char}」 ${filteredData.length}作品`;
+            }
+
             updateCharInfoCard();
             renderGrid();
         }
@@ -848,7 +864,7 @@
             const pageItems = filteredData.slice(startIndex, endIndex);
 
             pageItems.forEach(item => {
-                const type = (item[KEY_TYPE] || '').toLowerCase();
+                const type = (item._type || '').toLowerCase();
                 let mainType = 'スタンプ';
                 let badgeClass = 'badge-sticker';
 
@@ -860,7 +876,7 @@
                     badgeClass = 'badge-theme';
                 }
 
-                if ((item[KEY_JPN_TITLE] || '').includes('動く')) {
+                if ((item._jpnTitle || '').includes('動く')) {
                     mainType = '動く' + mainType;
                 }
 
@@ -868,31 +884,31 @@
                 if (item.parsedTags && item.parsedTags.length > 0) {
                     item.parsedTags.forEach(tag => {
                         if (tag !== 'スタンプ' && tag !== '絵文字' && tag !== '着せ替え' && tag !== 'プレミアム' && tag !== '動くスタンプ' && tag !== '動く絵文字') {
-                            badgesHtml += `<span class="badge badge-custom">${tag}</span>`;
+                            badgesHtml += `<span class="badge badge-custom">${escapeHtml(tag)}</span>`;
                         }
                     });
                 }
 
-                const isPremium = item[KEY_PREMIUM] === '1';
+                const isPremium = item._premium === '1';
                 const premiumBadgeHtml = isPremium ? '<span class="badge badge-premium">Premium対象</span>' : '';
                 
-                const imgSrc = item[KEY_IMG_BASE64] && item[KEY_IMG_BASE64].startsWith('data:image') 
-                    ? item[KEY_IMG_BASE64] 
-                    : item[KEY_IMG_URL];
+                const imgSrc = item._imgBase64 && item._imgBase64.startsWith('data:image') 
+                    ? item._imgBase64 
+                    : item._imgUrl;
 
                 const cardHtml = `
                     <div class="card">
                         <div class="card-img-wrap">
-                            <img src="${imgSrc}" alt="${item[KEY_JPN_TITLE]}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\' fill=\'%238DAF9E\'><circle cx=\'50\' cy=\'50\' r=\'40\'/></svg>'">
+                            <img src="${imgSrc}" alt="${escapeHtml(item._jpnTitle)}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\' fill=\'%238DAF9E\'><circle cx=\'50\' cy=\'50\' r=\'40\'/></svg>'">
                         </div>
                         <div class="card-content">
                             <div class="badge-group">
                                 ${badgesHtml}
                                 ${premiumBadgeHtml}
                             </div>
-                            <div class="card-title">${item[KEY_JPN_TITLE]}</div>
-                            <div class="card-subtitle">${item[KEY_ENG_TITLE]}</div>
-                            <a href="${item[KEY_URL]}" target="_blank" class="store-link">LINE STOREで見る</a>
+                            <div class="card-title">${escapeHtml(item._jpnTitle)}</div>
+                            <div class="card-subtitle">${escapeHtml(item._engTitle)}</div>
+                            <a href="${item._url}" target="_blank" class="store-link">LINE STOREで見る</a>
                         </div>
                     </div>`;
                 grid.innerHTML += cardHtml;
