@@ -36,22 +36,13 @@
 
         /* ヘッダーデザイン（看板画像・ロゴ画像対応） */
         header {
-/*
-            background-color: var(--header-bg);
-            padding: 25px 20px 20px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 180px;
             text-align: center;
-            border-bottom: 3px solid var(--border-color);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            */
-/*  position: fixed;*/
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 180px;
-text-align: center;
-  background-color: var(--header-bg);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-/*  z-index: 1000;*/
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .logo-container {
@@ -59,6 +50,7 @@ text-align: center;
             flex-direction: column;
             align-items: center;
             margin-bottom: 10px;
+            padding-top: 15px;
         }
 
         /* 本番用のロゴ画像。存在しない場合は代替表示（alt）またはインラインSVGをフォールバック */
@@ -87,7 +79,7 @@ text-align: center;
             font-size: 26px;
             font-weight: 800;
             color: var(--bg-color);
-            margin: 10px 0 5px;
+            margin: 5px 0;
             letter-spacing: 0.05em;
         }
 
@@ -334,7 +326,7 @@ text-align: center;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
         }
 
-        /* カード右下のカメラ透かしマーク（外部画像watermark.png対応、フォールバックでSVGインライン指定） */
+        /* カード右下の透かしマーク */
         .card::after {
             content: "";
             position: absolute;
@@ -342,7 +334,6 @@ text-align: center;
             bottom: 8px;
             width: 70px;
             height: 70px;
-            /* 外出し画像に対応。配置がなければデフォルトのSVGを表示 */
             background-image: url('images/watermark.png'), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none"><path d="M15 20H45V48H15V20Z" stroke="%23E0EBF0" stroke-width="2" stroke-linejoin="round"/><path d="M22 20V15H38V20" stroke="%23E0EBF0" stroke-width="2" stroke-linejoin="round"/><circle cx="30" cy="34" r="8" stroke="%23E0EBF0" stroke-width="2"/><circle cx="40" cy="25" r="2" fill="%23E0EBF0"/></svg>');
             background-size: contain;
             background-repeat: no-repeat;
@@ -395,7 +386,7 @@ text-align: center;
         .badge-sticker { background-color: var(--btn-hover); }
         .badge-emoji { background-color: var(--accent-red); }
         .badge-theme { background-color: var(--text-sub); }
-        .badge-custom { background-color: #7B68EE; } /* カスタム登録タグ用カラー（ミディアムスレートブルー） */
+        .badge-custom { background-color: #7B68EE; }
         
         .badge-premium {
             background-color: var(--accent-gold);
@@ -499,7 +490,6 @@ text-align: center;
     <!-- ヘッダーエリア -->
     <header>
         <div class="logo-container">
-            <!-- 外出しヘッダー看板・ロゴ用画像に対応。ロード失敗時にデフォルトSVGを呼び出し -->
             <img src="images/header-logo.png" alt="ヨシダスタジオ" class="logo-image" onerror="showFallbackLogo(this)">
         </div>
         <h1>LINE Digital Contents Portfolio</h1>
@@ -549,8 +539,8 @@ text-align: center;
         const KEY_URL = 'URL';
         const KEY_IMG_URL = '画像URL';
         const KEY_IMG_BASE64 = '画像バイナリ(Base64)';
-        const KEY_CHARACTER = 'キャラクター'; // 追加カラム
-        const KEY_TAGS = 'タグ';             // 追加カラム
+        const KEY_CHARACTER = 'キャラクター';
+        const KEY_TAGS = 'タグ';
 
         // 1ページあたりの表示件数
         const ITEMS_PER_PAGE = 3;
@@ -558,14 +548,13 @@ text-align: center;
         // グローバルステート
         let allData = [];
         let filteredData = [];
-        let characterMap = []; // characters.jsonからロード
-        let currentMode = 'tag'; // 'tag' or 'char'
+        let characterMap = [];
+        let currentMode = 'tag';
         let currentTag = 'すべて';
         let currentCharacter = '';
         let currentPage = 1;
-        let charIndexOffset = 0; // カルーセルのスクロール制御用
+        let charIndexOffset = 0;
 
-        // デフォルト絵文字アバター（アセット欠損時の保険）
         const fallbackAvatars = {
             'あいつ': '👤',
             'ちびうぱ': '👾',
@@ -577,7 +566,6 @@ text-align: center;
             'その他': '🎨'
         };
 
-        // ロゴ画像読込エラー時のフォールバック処理
         function showFallbackLogo(imgElement) {
             imgElement.style.display = 'none';
             const svgFallback = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -594,12 +582,16 @@ text-align: center;
             imgElement.parentNode.insertBefore(svgFallback, imgElement);
         }
 
-        // CSVパーサー
+        // CSVパーサー（修正版）
         function parseCSV(text) {
-            const lines = text.split(/\r?\n/);
+            // BOM（\uFEFF）の除去処理を追加
+            const cleanText = text.replace(/^\uFEFF/, '');
+            const lines = cleanText.split(/\r?\n/);
             const result = [];
             if (lines.length === 0) return result;
-            const headers = lines.split(',');
+
+            // ヘッダー行を取得してクォートを除去
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
             
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
@@ -622,14 +614,11 @@ text-align: center;
                 if (row.length >= headers.length) {
                     let obj = {};
                     headers.forEach((header, index) => {
-                        obj[header.trim()] = row[index] ? row[index].replace(/^"|"$/g, '') : '';
+                        obj[header] = row[index] ? row[index].replace(/^"|"$/g, '') : '';
                     });
                     
-                    // 追加：複数指定のタグをパースして配列化
                     const tagString = obj[KEY_TAGS] || '';
                     obj.parsedTags = tagString ? tagString.split('|').map(t => t.trim()) : [];
-                    
-                    // 追加：キャラクターを格納（未指定の場合は「その他」）
                     obj.charGroup = obj[KEY_CHARACTER] || 'その他';
                     
                     result.push(obj);
@@ -638,10 +627,8 @@ text-align: center;
             return result;
         }
 
-        // アプリ起動時ロード
         async function init() {
             try {
-                // 1. characters.json の非同期読み込み
                 const charResponse = await fetch('characters.json');
                 if (charResponse.ok) {
                     characterMap = await charResponse.json();
@@ -649,7 +636,7 @@ text-align: center;
                     throw new Error("JSONロードに失敗しました");
                 }
             } catch (e) {
-                console.warn("characters.jsonの読み込みに失敗したため、プログラム内で定義します。");
+                console.warn("characters.jsonの読み込みに失敗したためフォールバックデータを使用します。");
                 characterMap = [
                     { "id": "chibiupa", "name": "ちびうぱ", "avatar_url": "images/avatar-chibiwoopa.gif", "description": "「ちびうぱ」は、ウーパールーパーをモチーフにしたキャラクターです。" },
                     { "id": "taijiros", "name": "たいじろうズ", "avatar_url": "images/avatar-taijiros.gif", "description": "「たいじろうズ」は、元気いっぱいな手描きオリジナルキャラクターです。" },
@@ -659,8 +646,12 @@ text-align: center;
             }
 
             try {
-                // 2. data.csv の非同期読み込みとパース
-                const csvResponse = await fetch('data.csv');
+                // 先ほどのPythonスクリプトの標準出力名(line_items_latest.csv)またはdata.csvに対応
+                let csvResponse = await fetch('data.csv');
+                if (!csvResponse.ok) {
+                    csvResponse = await fetch('line_items_latest.csv');
+                }
+
                 if (csvResponse.ok) {
                     const text = await csvResponse.text();
                     allData = parseCSV(text);
@@ -668,8 +659,7 @@ text-align: center;
                     throw new Error("CSVロードに失敗しました");
                 }
             } catch (e) {
-                console.warn("data.csvの読み込みに失敗しました。ファイルが正しく配置されているか確認してください。");
-                // フォールバックデモデータ
+                console.warn("CSVの読み込みに失敗しました。フォールバックデータを使用します。");
                 allData = [
                     {
                         '英字タイトル': 'aitsu mecha-ugoku 2',
@@ -685,28 +675,13 @@ text-align: center;
                         'タグ': '絵文字|動く絵文字',
                         'parsedTags': ['絵文字', '動く絵文字'],
                         'charGroup': 'あいつ'
-                    },
-                    {
-                        '英字タイトル': 'Cho-ugoku fukidashi',
-                        '英字省略名': 'Cho-u...dashi',
-                        '日本語タイトル': '【めちゃ動く】シンプル 日常ふきだし',
-                        '日本語省略名': '【めちゃ動...常ふきだし',
-                        'Premium対象': '1',
-                        'type(sticker or emoji or theme)': 'sticker',
-                        'URL': 'https://store.line.me/stickershop/product/35854684/ja',
-                        '画像URL': 'https://stickershop.line-scdn.net/stickershop/v1/product/35854684/LINEStorePC/main.png?v=1',
-                        '画像バイナリ(Base64)': '',
-                        'キャラクター': 'その他',
-                        'タグ': 'スタンプ|動くスタンプ|プレミアム',
-                        'parsedTags': ['スタンプ', '動くスタンプ', 'プレミアム'],
-                        'charGroup': 'その他'
                     }
                 ];
             }
 
-            // 初期選択キャラクターの設定（JSON定義の最初のキャラクター）
+            // 初期選択キャラクターの設定（修正版）
             if (characterMap.length > 0) {
-                currentCharacter = characterMap.name;
+                currentCharacter = characterMap[0].name;
             } else {
                 currentCharacter = "その他";
             }
@@ -714,7 +689,6 @@ text-align: center;
             switchMode('tag');
         }
 
-        // 表示切替（タグ or キャラクタ）
         function switchMode(mode) {
             currentMode = mode;
             currentPage = 1;
@@ -734,11 +708,9 @@ text-align: center;
             }
         }
 
-        // CSVから動的にタグを集計し、ボタンをレンダリングする
         function renderTagControls() {
             const counts = { 'すべて': allData.length };
             
-            // CSV内のすべての個別タグを収集して自動計上
             allData.forEach(item => {
                 if (item.parsedTags && item.parsedTags.length > 0) {
                     item.parsedTags.forEach(tag => {
@@ -752,7 +724,6 @@ text-align: center;
             const controlArea = document.getElementById('control-area');
             let html = '<div class="tag-container">';
             
-            // 「すべて」を先頭に、集計されたすべてのユニークタグボタンを作成
             const tags = Object.keys(counts);
             tags.forEach(t => {
                 const activeClass = t === currentTag ? 'active' : '';
@@ -762,7 +733,6 @@ text-align: center;
             controlArea.innerHTML = html;
         }
 
-        // タグフィルタリング
         function filterByTag(tag) {
             currentTag = tag;
             currentPage = 1;
@@ -774,7 +744,6 @@ text-align: center;
             if (tag === 'すべて') {
                 filteredData = allData;
             } else {
-                // 複数タグの配列内に、指定タグが存在するかを照合する（完全データ駆動対応）
                 filteredData = allData.filter(item => item.parsedTags && item.parsedTags.includes(tag));
             }
 
@@ -782,7 +751,6 @@ text-align: center;
             renderGrid();
         }
 
-        // キャラクターコントロール（カルーセル等）をJSONベースで生成
         function renderCharControls() {
             const controlArea = document.getElementById('control-area');
             
@@ -794,8 +762,6 @@ text-align: center;
             
             characterMap.forEach(c => {
                 const activeClass = c.name === currentCharacter ? 'active' : '';
-                
-                // 本番用アニメーションGIFが定義されていれば画像表示、ロード失敗時や空の場合は絵文字にフォールバック
                 let avatarHtml = `<img src="${c.avatar_url}" alt="${c.name}" class="char-avatar-img" onerror="fallbackAvatarImage(this, '${c.name}')">`;
                 
                 html += `
@@ -815,13 +781,11 @@ text-align: center;
             updateCharInfoCard();
         }
 
-        // カルーセルのアバター画像読み込みエラー時
         function fallbackAvatarImage(imgElement, charName) {
             const container = imgElement.parentNode;
             container.innerHTML = `<div class="char-avatar-fallback">${fallbackAvatars[charName] || '👤'}</div>`;
         }
 
-        // カルーセルスクロール
         function scrollCarousel(direction) {
             const track = document.getElementById('carousel-track');
             const items = document.querySelectorAll('.carousel-item');
@@ -829,7 +793,6 @@ text-align: center;
             track.style.transform = `translateX(-${charIndexOffset * 72}px)`;
         }
 
-        // キャラクター情報カードの更新（外出しJSONに基づくデータ出力）
         function updateCharInfoCard() {
             const count = allData.filter(item => item.charGroup === currentCharacter).length;
             const container = document.getElementById('char-info-container');
@@ -851,13 +814,11 @@ text-align: center;
                 </div>`;
         }
 
-        // 情報カードアバターロードエラー時フォールバック
         function fallbackCardAvatar(imgElement, charName) {
             const container = imgElement.parentNode;
             container.innerHTML = `<span class="char-avatar-fallback">${fallbackAvatars[charName] || '👤'}</span>`;
         }
 
-        // キャラクターフィルタリング（CSVの「キャラクター」列ベースで抽出）
         function filterByCharacter(char) {
             currentCharacter = char;
             currentPage = 1;
@@ -872,7 +833,6 @@ text-align: center;
             renderGrid();
         }
 
-        // ポートフォリオカード一覧の描画（複数バッジ対応）
         function renderGrid() {
             const grid = document.getElementById('portfolio-grid');
             grid.innerHTML = '';
@@ -900,15 +860,13 @@ text-align: center;
                     badgeClass = 'badge-theme';
                 }
 
-                if (item[KEY_JPN_TITLE].includes('動く')) {
+                if ((item[KEY_JPN_TITLE] || '').includes('動く')) {
                     mainType = '動く' + mainType;
                 }
 
-                // 複数タグに基づいた動的な個別バッジ生成
                 let badgesHtml = `<span class="badge ${badgeClass}">${mainType}</span>`;
                 if (item.parsedTags && item.parsedTags.length > 0) {
                     item.parsedTags.forEach(tag => {
-                        // type判定以外の独立したカスタムタグがある場合は専用バッジを追加
                         if (tag !== 'スタンプ' && tag !== '絵文字' && tag !== '着せ替え' && tag !== 'プレミアム' && tag !== '動くスタンプ' && tag !== '動く絵文字') {
                             badgesHtml += `<span class="badge badge-custom">${tag}</span>`;
                         }
@@ -918,7 +876,6 @@ text-align: center;
                 const isPremium = item[KEY_PREMIUM] === '1';
                 const premiumBadgeHtml = isPremium ? '<span class="badge badge-premium">Premium対象</span>' : '';
                 
-                // 画像ソース of 決定（Base64優先、無ければ画像URL）
                 const imgSrc = item[KEY_IMG_BASE64] && item[KEY_IMG_BASE64].startsWith('data:image') 
                     ? item[KEY_IMG_BASE64] 
                     : item[KEY_IMG_URL];
@@ -944,7 +901,6 @@ text-align: center;
             renderPagination();
         }
 
-        // ページネーションコントロールの描画
         function renderPagination() {
             const container = document.getElementById('pagination-container');
             container.innerHTML = '';
@@ -954,11 +910,9 @@ text-align: center;
 
             let html = '<div class="pagination-row">';
             
-            // 最初へ / 前へボタン
             html += `<button class="page-btn" onclick="changePage(1)" ${currentPage === 1 ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>« 最初へ</button>`;
             html += `<button class="page-btn" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>‹ 前へ</button>`;
 
-            // ページ番号ボタン（前後2ページを表示するロジック）
             let startPage = Math.max(1, currentPage - 1);
             let endPage = Math.min(totalPages, startPage + 2);
             if (endPage - startPage < 2) {
@@ -974,7 +928,6 @@ text-align: center;
                 html += `<button class="page-btn" onclick="changePage(${totalPages})" ${currentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>${totalPages}</button>`;
             }
 
-            // 次へ / 最後へボタン
             html += `<button class="page-btn" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>次へ ›</button>`;
             html += `<button class="page-btn" onclick="changePage(${totalPages})" ${currentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: default;"' : ''}>最後へ »</button>`;
 
@@ -988,7 +941,6 @@ text-align: center;
             window.scrollTo({ top: 120, behavior: 'smooth' });
         }
 
-        // アプリ起動
         window.onload = init;
     </script>
 </body>
