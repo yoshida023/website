@@ -566,18 +566,18 @@
 
         // 画像URL / Base64 の優先順位付き取得ロジック
         function getImgSrc(item) {
+            if (item._imgUrl && item._imgUrl.trim()) {
+                return item._imgUrl.trim();
+            }
             if (item._imgBase64 && item._imgBase64.trim()) {
                 const b64 = item._imgBase64.trim();
                 if (b64.startsWith('data:image')) return b64;
                 return `data:image/png;base64,${b64}`;
             }
-            if (item._imgUrl && item._imgUrl.trim()) {
-                return item._imgUrl.trim();
-            }
             return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="%238DAF9E"><circle cx="50" cy="50" r="40"/></svg>';
         }
 
-        // CSVパーサー（列名や揺らぎに強い自動正規化）
+        // CSVパーサー（誤検出を防止する厳格なヘッダー判定）
         function parseCSV(text) {
             const cleanText = text.replace(/^\uFEFF/, '');
             const lines = cleanText.split(/\r?\n/);
@@ -586,27 +586,44 @@
 
             const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
-            // カラム名の自動検出（相互にキーワードが含まれるか柔軟に判定）
+            // キーワードに完全/部分一致するヘッダーを見つける（優先順位付き）
             const findHeader = (keywords, defaultKey) => {
+                for (let k of keywords) {
+                    const found = headers.find(h => h.toLowerCase().includes(k.toLowerCase()));
+                    if (found) return found;
+                }
+                return defaultKey;
+            };
+
+            // 画像URL専用（「バイナリ」「base64」が含まれる列を誤検出しないように除外）
+            const findImgUrlHeader = () => {
                 const found = headers.find(h => {
                     const hLower = h.toLowerCase();
-                    return keywords.some(k => {
-                        const kLower = k.toLowerCase();
-                        return hLower.includes(kLower) || kLower.includes(hLower);
-                    });
+                    const isBinary = hLower.includes('バイナリ') || hLower.includes('base64');
+                    const isImg = hLower.includes('画像url') || hLower.includes('img_url') || hLower.includes('サムネイル') || hLower.includes('thumbnail') || hLower.includes('画像') || hLower.includes('image') || hLower.includes('img');
+                    return isImg && !isBinary;
                 });
-                return found || defaultKey;
+                return found || '画像URL';
+            };
+
+            // 画像バイナリ専用
+            const findImgBase64Header = () => {
+                const found = headers.find(h => {
+                    const hLower = h.toLowerCase();
+                    return hLower.includes('バイナリ') || hLower.includes('base64') || hLower.includes('binary');
+                });
+                return found || '画像バイナリ(Base64)';
             };
 
             const keyEngTitle = findHeader(['英字タイトル', 'eng_title', 'eng'], '英字タイトル');
             const keyJpnTitle = findHeader(['日本語タイトル', 'jpn_title', 'タイトル', 'title'], '日本語タイトル');
-            const keyPremium = findHeader(['Premium', 'プレミアム', 'premium'], 'Premium対象');
+            const keyPremium = findHeader(['premium対象', 'premium', 'プレミアム'], 'Premium対象');
             const keyType = findHeader(['type', 'タイプ', '種別'], 'type(sticker or emoji or theme)');
-            const keyUrl = findHeader(['store_url', 'URL', 'url', 'link'], 'URL');
-            const keyImgUrl = findHeader(['画像URL', 'img_url', '画像', 'サムネイル', 'image', 'img', 'thumb'], '画像URL');
-            const keyImgBase64 = findHeader(['画像バイナリ', 'base64', 'binary', 'b64'], '画像バイナリ(Base64)');
+            const keyUrl = findHeader(['store_url', 'url', 'link'], 'URL');
+            const keyImgUrl = findImgUrlHeader();
+            const keyImgBase64 = findImgBase64Header();
             const keyCharacter = findHeader(['キャラクター', 'キャラ', 'character', 'char'], 'キャラクター');
-            const keyTags = findHeader(['タグ', 'tag', 'tags'], 'タグ');
+            const keyTags = findHeader(['タグ', 'tags', 'tag'], 'タグ');
 
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
