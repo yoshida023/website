@@ -1,0 +1,26 @@
+[
+  {
+    "id": "chibiupa",
+    "name": "ちびうぱ",
+    "avatar_url": "images/avatar-chibiwoopa.gif",
+    "description": "「ちびうぱ」は、ウーパールーパーをモチーフにした、ゆるくて可愛い人気キャラクターです。"
+  },
+  {
+    "id": "taijiros",
+    "name": "たいじろうズ",
+    "avatar_url": "images/avatar-taijiros.gif",
+    "description": "「たいじろうズ」は、表情豊かで元気いっぱいの手書き風オリジナルキャラクターです。"
+  },
+  {
+    "id": "aitsu",
+    "name": "あいつ",
+    "avatar_url": "images/avatar-aitsu.gif",
+    "description": "「あいつ」は吉田スタジオが描く、少しシュールで愛らしいオープンソースキャラクターです。"
+  },
+  {
+    "id": "others",
+    "name": "その他",
+    "avatar_url": "images/avatar-others.gif",
+    "description": "吉田スタジオの個性的で魅力的なLINEデジタルコンテンツ作品です。"
+  }
+]
