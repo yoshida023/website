@@ -89,7 +89,7 @@
         </div>
       </div>
 
-      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー -->
+      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー（プレビュー画面の直下） -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
@@ -255,7 +255,7 @@
       eyedropperIndicator.classList.add('hidden');
       eyedropperBtn.classList.remove('bg-emerald-600');
       
-      // 即座にプレビュー画面へ反映
+      // 即座にプレビュー画面へ透過反映
       renderFramePreview(parseInt(startFrameRange.value));
     });
 
@@ -479,6 +479,10 @@
         const url = URL.createObjectURL(file);
         video.src = url;
 
+        const cleanup = () => {
+          URL.revokeObjectURL(url);
+        };
+
         video.onloadedmetadata = async () => {
           try {
             const w = video.videoWidth || 320;
@@ -492,31 +496,32 @@
 
             for (let i = 0; i < totalFrames; i++) {
               const targetTime = i / fps;
-              if (Math.abs(video.currentTime - targetTime) > 0.001) {
-                await new Promise((res) => {
-                  const onSeeked = () => {
-                    video.removeEventListener('seeked', onSeeked);
-                    res();
-                  };
-                  video.addEventListener('seeked', onSeeked);
-                  video.currentTime = targetTime;
-                });
-              }
+              await new Promise((res) => {
+                const onSeeked = () => {
+                  video.removeEventListener('seeked', onSeeked);
+                  res();
+                };
+                video.addEventListener('seeked', onSeeked);
+                video.currentTime = targetTime === 0 ? 0.001 : targetTime;
+              });
+
               ctx.drawImage(video, 0, 0, w, h);
               const imgData = ctx.getImageData(0, 0, w, h);
               rawFrames.push({ imageData: imgData, delay: 1000 / fps });
             }
-            URL.revokeObjectURL(url);
+            cleanup();
             resolve();
           } catch (err) {
-            URL.revokeObjectURL(url);
+            cleanup();
             reject(err);
           }
         };
         video.onerror = (err) => {
-          URL.revokeObjectURL(url);
+          cleanup();
           reject(err);
         };
+
+        video.load();
       });
     }
 
