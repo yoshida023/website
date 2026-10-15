@@ -89,7 +89,7 @@
         </div>
       </div>
 
-      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー（プレビュー画面の直下） -->
+      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー（プレビュー画面の直下に配置） -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
@@ -241,7 +241,7 @@
       const x = Math.floor((e.clientX - rect.left) * (previewCanvas.width / rect.width));
       const y = Math.floor((e.clientY - rect.top) * (previewCanvas.height / rect.height));
       const pixel = ctx.getImageData(x, y, 1, 1).data;
-      const hex = "#" + ((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1);
+      const hex = "#" + ((1 << 24) + (pixel << 16) + (pixel << 8) + pixel).toString(16).slice(1);
       chromaColor.value = hex;
       isEyedropperActive = false;
       eyedropperIndicator.classList.add('hidden');
@@ -270,6 +270,40 @@
       playStateBadge.classList.add('hidden');
       resultImage.classList.add('hidden');
       previewCanvas.classList.remove('hidden');
+    }
+
+    // 先頭のブランクコマ（完全透明または無地/単一色コマ）を自動判定
+    function isBlankFrame(imgData) {
+      const data = imgData.data;
+      if (!data || data.length === 0) return true;
+
+      // 1. 完全透明判定
+      let allTransparent = true;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] !== 0) {
+          allTransparent = false;
+          break;
+        }
+      }
+      if (allTransparent) return true;
+
+      // 2. 単一色（無地コマ / 雑音吸収）判定
+      const firstR = data[0];
+      const firstG = data[1];
+      const firstB = data[2];
+      const firstA = data[3];
+
+      let maxDiff = 0;
+      for (let i = 0; i < data.length; i += 16) {
+        const rDiff = Math.abs(data[i] - firstR);
+        const gDiff = Math.abs(data[i+1] - firstG);
+        const bDiff = Math.abs(data[i+2] - firstB);
+        const aDiff = Math.abs(data[i+3] - firstA);
+        const diff = rDiff + gDiff + bDiff + aDiff;
+        if (diff > maxDiff) maxDiff = diff;
+        if (maxDiff > 12) return false; // 実体グラフィックあり
+      }
+      return true; // ブランクコマ
     }
 
     async function handleFileSelect(e) {
@@ -311,6 +345,11 @@
       if (rawFrames.length === 0) {
         alert('コマ情報を取得できませんでした。');
         return;
+      }
+
+      // 先頭のブランクコマ（完全透明または単一色コマ）を自動除外
+      while (rawFrames.length > 1 && isBlankFrame(rawFrames[0].imageData)) {
+        rawFrames.shift();
       }
 
       startFrameRange.min = 0;
