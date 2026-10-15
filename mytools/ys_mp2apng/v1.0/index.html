@@ -50,7 +50,7 @@
       </div>
     </label>
 
-    <!-- 2. プレビュー ＆ コマ指定（プレビュー直下配置） -->
+    <!-- 2. プレビュー ＆ コマ指定（プレビュー直下に配置） -->
     <section id="previewSection" class="hidden space-y-3">
       <!-- メトリクスバッジ -->
       <div class="grid grid-cols-3 gap-2 text-center text-xs">
@@ -88,7 +88,7 @@
         </div>
       </div>
 
-      <!-- 🏁 アイキャッチ（先頭コマ） ＆ 終端コマ指定スライダー（プレビュー直下に配置） -->
+      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー（プレビュー画面のすぐ直下に配置） -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
@@ -115,7 +115,7 @@
 
     </section>
 
-    <!-- 3. 編集コントロール (設定アコーディオン) -->
+    <!-- 3. 編集コントロール -->
     <section id="controlsSection" class="hidden space-y-3">
 
       <!-- ⚙️ スマートフレーム圧縮 -->
@@ -274,14 +274,14 @@
     async function handleFileSelect(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      const file = files[0]; // 単一ファイルの正常取得
+      const file = files[0]; // 単一ファイルの取得
 
       resetPreviewMode();
       rawFrames = [];
 
       try {
         const fileType = file.type || '';
-        const fileName = file.name.toLowerCase();
+        const fileName = file.name ? file.name.toLowerCase() : '';
 
         if (fileType.includes('video') || fileName.endsWith('.mp4')) {
           await extractVideoFrames(file);
@@ -302,11 +302,15 @@
           }
         }
       } catch (err) {
-        alert('ファイルの読み込みに失敗しました。対応形式をご確認ください。');
+        console.error('File load error:', err);
+        alert('ファイルの読み込みに失敗しました。ファイル形式（MP4/GIF/APNG）をご確認ください。');
         return;
       }
 
-      if (rawFrames.length === 0) return;
+      if (rawFrames.length === 0) {
+        alert('コマ情報を取得できませんでした。');
+        return;
+      }
 
       startFrameRange.min = 0;
       startFrameRange.max = rawFrames.length - 1;
@@ -328,11 +332,20 @@
     // GIFデコード (gifuct-js)
     async function decodeGifFile(file) {
       const arrayBuffer = await file.arrayBuffer();
-      const parseGIF = window.parseGIF || (window.gifuct && window.gifuct.parseGIF) || (window.Gifuct && window.Gifuct.parseGIF);
-      const decompressFrames = window.decompressFrames || (window.gifuct && window.gifuct.decompressFrames) || (window.Gifuct && window.Gifuct.decompressFrames);
+      let parseGIF = window.parseGIF;
+      let decompressFrames = window.decompressFrames;
+
+      if (!parseGIF && window.gifuct) {
+        parseGIF = window.gifuct.parseGIF;
+        decompressFrames = window.gifuct.decompressFrames;
+      }
+      if (!parseGIF && window.Gifuct) {
+        parseGIF = window.Gifuct.parseGIF;
+        decompressFrames = window.Gifuct.decompressFrames;
+      }
 
       if (!parseGIF || !decompressFrames) {
-        throw new Error('GIFデコーダーの初期化に失敗しました');
+        throw new Error('GIFデコーダーライブラリの読み込みに失敗しました');
       }
 
       const gif = parseGIF(arrayBuffer);
@@ -348,7 +361,11 @@
       const tempCtx = tempCanvas.getContext('2d');
 
       frames.forEach(frame => {
-        const patchData = new ImageData(frame.patch, frame.dims.width, frame.dims.height);
+        if (frame.disposalType === 2) {
+          tempCtx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+        }
+
+        const patchData = new ImageData(new Uint8ClampedArray(frame.patch), frame.dims.width, frame.dims.height);
         const patchCanvas = document.createElement('canvas');
         patchCanvas.width = frame.dims.width;
         patchCanvas.height = frame.dims.height;
@@ -361,10 +378,6 @@
           imageData: fullImgData,
           delay: frame.delay || 100
         });
-
-        if (frame.disposalType === 2) {
-          tempCtx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
-        }
       });
     }
 
@@ -375,29 +388,52 @@
         video.playsInline = true;
         video.muted = true;
         video.preload = 'auto';
-        video.src = URL.createObjectURL(file);
+
+        const url = URL.createObjectURL(file);
+        video.src = url;
 
         video.onloadeddata = async () => {
-          previewCanvas.width = video.videoWidth;
-          previewCanvas.height = video.videoHeight;
-          const fps = 10;
-          const duration = video.duration || 1;
-          const totalFrames = Math.min(Math.floor(duration * fps), 100);
+          try {
+            const w = video.videoWidth || 320;
+            const h = video.videoHeight || 320;
+            previewCanvas.width = w;
+            previewCanvas.height = h;
 
-          for (let i = 0; i < totalFrames; i++) {
-            video.currentTime = i / fps;
-            await new Promise(r => video.onseeked = r);
-            ctx.drawImage(video, 0, 0);
-            const imgData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
-            rawFrames.push({ imageData: imgData, delay: 1000 / fps });
+            const fps = 10;
+            const duration = video.duration || 1;
+            const totalFrames = Math.min(Math.floor(duration * fps), 100);
+
+            for (let i = 0; i < totalFrames; i++) {
+              const targetTime = i / fps;
+              if (Math.abs(video.currentTime - targetTime) > 0.001) {
+                video.currentTime = targetTime;
+                await new Promise((res) => {
+                  const onSeeked = () => {
+                    video.removeEventListener('seeked', onSeeked);
+                    res();
+                  };
+                  video.addEventListener('seeked', onSeeked);
+                });
+              }
+              ctx.drawImage(video, 0, 0, w, h);
+              const imgData = ctx.getImageData(0, 0, w, h);
+              rawFrames.push({ imageData: imgData, delay: 1000 / fps });
+            }
+            URL.revokeObjectURL(url);
+            resolve();
+          } catch (err) {
+            URL.revokeObjectURL(url);
+            reject(err);
           }
-          resolve();
         };
-        video.onerror = (err) => reject(err);
+        video.onerror = (err) => {
+          URL.revokeObjectURL(url);
+          reject(err);
+        };
       });
     }
 
-    // プレビュー表示（クロマキー透過をリアルタイム適用）
+    // プレビュー描画（クロマキー＆エッジ侵食のリアルタイム反映）
     function renderFramePreview(idx) {
       if (!rawFrames[idx]) return;
       const frame = rawFrames[idx];
@@ -438,7 +474,7 @@
         ];
       }
 
-      // クロマキー・エッジ侵食処理
+      // クロマキー・エッジ侵食の全コマ適用
       const processedRawFrames = rawFrames.map(f => {
         const imgData = new ImageData(new Uint8ClampedArray(f.imageData.data), f.imageData.width, f.imageData.height);
         if (doChroma && targetRGB) {
@@ -450,7 +486,7 @@
       // 出力シーケンス構築
       const sequenceFrames = [];
 
-      // 1コマ目: アイキャッチコマ (0.01s)
+      // 【1コマ目】指定されたアイキャッチコマ (0.01s)
       if (processedRawFrames[coverIdx]) {
         sequenceFrames.push({
           imageData: new ImageData(
@@ -462,7 +498,7 @@
         });
       }
 
-      // 2コマ目以降: 0コマ目〜終端コマ(endIdx)
+      // 【2コマ目以降】元動画の0コマ目〜指定終端コマ(endIdx)
       for (let i = 0; i <= endIdx; i++) {
         const f = processedRawFrames[i];
         sequenceFrames.push({
@@ -478,7 +514,7 @@
       // 差分圧縮処理
       processedFrames = [];
       if (sequenceFrames.length > 0) {
-        processedFrames.push(sequenceFrames[0]); // 1コマ目のアイキャッチは固定
+        processedFrames.push(sequenceFrames[0]); // 1コマ目アイキャッチ固定
 
         if (sequenceFrames.length > 1) {
           let currentFrame = {
@@ -512,7 +548,7 @@
         }
       }
 
-      // APNG エンコード
+      // APNG エンコード (UPNG.js)
       const imgs = processedFrames.map(f => f.imageData.data.buffer);
       const delays = processedFrames.map(f => f.delay);
       const w = previewCanvas.width;
@@ -533,7 +569,7 @@
       warningBanner.classList.toggle('hidden', frameCount <= 20);
       downloadBtn.disabled = false;
 
-      // アニメーションAPNGを表示
+      // 生成APNGアニメーションの再生表示
       if (generatedBlob) {
         const url = URL.createObjectURL(generatedBlob);
         resultImage.src = url;
@@ -559,13 +595,13 @@
       return diffSum / totalPixels;
     }
 
-    // クロマキー ＆ エッジ侵食アルゴリズム修復
+    // クロマキー ＆ エッジ侵食アルゴリズム
     function applyChromaKeyAndErosion(imgData, targetRGB, erosionPx) {
       const data = imgData.data;
       const w = imgData.width;
       const h = imgData.height;
 
-      // 1. クロマキー透過（配列インデックス参照修復）
+      // 1. クロマキー透過
       for (let i = 0; i < data.length; i += 4) {
         if (data[i+3] === 0) continue;
         const dist = Math.sqrt(
@@ -574,7 +610,7 @@
           Math.pow(data[i+2] - targetRGB[2], 2)
         );
         if (dist < 65) {
-          data[i+3] = 0; // 透過設定
+          data[i+3] = 0; // 透過
         }
       }
 
