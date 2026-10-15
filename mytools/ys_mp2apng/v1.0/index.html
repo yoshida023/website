@@ -13,7 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/dist/gifuct-js.min.js"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; }
-    /* 透明格子背景 */
+    /* 透過背景確認用チェック柄 */
     .checkerboard {
       background-color: #1e293b;
       background-image: 
@@ -76,9 +76,9 @@
 
       <!-- キャンバス＆APNGプレビュー表示エリア -->
       <div class="relative rounded-2xl overflow-hidden border border-slate-800 checkerboard flex items-center justify-center min-h-[240px]">
-        <!-- 編集用キャンバス -->
+        <!-- 編集時キャンバス -->
         <canvas id="previewCanvas" class="max-w-full max-h-[300px] object-contain cursor-crosshair"></canvas>
-        <!-- 生成後のアニメーションAPNGプレビュー -->
+        <!-- 生成後のAPNGアニメーションプレビュー -->
         <img id="resultImage" class="hidden max-w-full max-h-[300px] object-contain" alt="生成されたAPNG">
         
         <div id="eyedropperIndicator" class="hidden absolute top-3 left-3 bg-slate-900/90 px-3 py-1.5 rounded-full text-xs text-emerald-400 border border-emerald-500/30 animate-pulse">
@@ -134,22 +134,24 @@
         </div>
       </div>
 
-      <!-- 🏁 先頭コマ ＆ トリミング -->
+      <!-- 🏁 アイキャッチ指定（1コマ目） ＆ 終端コマ -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
-            <span class="text-slate-300 font-semibold">🏁 先頭コマ指定 (極短0.01s設定)</span>
+            <span class="text-slate-300 font-semibold">🏁 アイキャッチ指定 (1コマ目: 0.01s)</span>
             <span id="startFrameVal" class="font-mono text-emerald-400">1 コマ目</span>
           </div>
           <input type="range" id="startFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
+          <p class="text-[11px] text-slate-400">指定したコマを0.01秒のカバー画像として先頭に配置します。</p>
         </div>
 
         <div class="space-y-1 pt-2 border-t border-slate-800">
           <div class="flex justify-between text-xs">
-            <span class="text-slate-300 font-semibold">✂️ 終端コマ（後方カット）</span>
+            <span class="text-slate-300 font-semibold">✂️ 終端コマ指定（後方カット）</span>
             <span id="endFrameVal" class="font-mono text-emerald-400">全コマ</span>
           </div>
           <input type="range" id="endFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
+          <p class="text-[11px] text-slate-400">動画の最初（0コマ目）から指定した終端コマまでを再生範囲にします。</p>
         </div>
       </div>
 
@@ -157,7 +159,7 @@
 
   </main>
 
-  <!-- 固定ボトムバー -->
+  <!-- 固定ボトムアクションバー -->
   <div id="bottomBar" class="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur border-t border-slate-800 p-4">
     <div class="max-w-md mx-auto grid grid-cols-2 gap-3">
       <button id="processBtn" disabled class="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
@@ -169,6 +171,7 @@
     </div>
   </div>
 
+  <!-- JavaScript制御部 -->
   <script>
     let rawFrames = [];
     let processedFrames = [];
@@ -258,8 +261,9 @@
     }
 
     async function handleFileSelect(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
 
       resetPreviewMode();
       rawFrames = [];
@@ -317,7 +321,7 @@
       const decompressFrames = window.decompressFrames || (window.gifuct && window.gifuct.decompressFrames);
 
       if (!parseGIF || !decompressFrames) {
-        throw new Error('GIFデコーダーが読み込まれていません');
+        throw new Error('GIFデコーダーの読み込みに失敗しました');
       }
 
       const gif = parseGIF(arrayBuffer);
@@ -391,8 +395,10 @@
     async function processAndGenerateAPNG() {
       resetPreviewMode();
 
-      const startIdx = parseInt(startFrameRange.value);
-      const endIdx = parseInt(endFrameRange.value);
+      if (rawFrames.length === 0) return;
+
+      const coverIdx = parseInt(startFrameRange.value); // アイキャッチ（1コマ目）指定
+      const endIdx = parseInt(endFrameRange.value);     // 本編の終端コマ指定
       const tolerance = parseFloat(toleranceRange.value) / 100;
       const doChroma = chromaToggle.checked;
       const erosionPx = parseInt(erosionRange.value);
@@ -407,55 +413,80 @@
         ];
       }
 
-      let framesToProcess = rawFrames.slice(startIdx, endIdx + 1);
-
-      if (doChroma && targetRGB) {
-        framesToProcess = framesToProcess.map(f => {
-          const imgData = new ImageData(new Uint8ClampedArray(f.imageData.data), f.imageData.width, f.imageData.height);
+      // 各コマの画像データ複製 ＆ クロマキー・エッジ侵食処理
+      const processedRawFrames = rawFrames.map(f => {
+        const imgData = new ImageData(new Uint8ClampedArray(f.imageData.data), f.imageData.width, f.imageData.height);
+        if (doChroma && targetRGB) {
           applyChromaKeyAndErosion(imgData, targetRGB, erosionPx);
-          return { imageData: imgData, delay: f.delay };
+        }
+        return { imageData: imgData, delay: f.delay };
+      });
+
+      // 出力コマシーケンスの構築
+      // 1. 【1コマ目】指定されたアイキャッチコマ (表示時間 0.01s / 10ms 固定)
+      const sequenceFrames = [];
+      if (processedRawFrames[coverIdx]) {
+        sequenceFrames.push({
+          imageData: new ImageData(
+            new Uint8ClampedArray(processedRawFrames[coverIdx].imageData.data),
+            processedRawFrames[coverIdx].imageData.width,
+            processedRawFrames[coverIdx].imageData.height
+          ),
+          delay: 10 // 0.01秒
         });
       }
 
-      // 先頭コマ極短（0.01秒）設定
-      if (framesToProcess.length > 0) {
-        framesToProcess[0].delay = 10;
-      }
-
-      // 差分圧縮処理
-      processedFrames = [];
-      if (framesToProcess.length > 0) {
-        let currentFrame = {
+      // 2. 【2コマ目以降】元動画の0コマ目〜指定された終端コマ(endIdx)まで
+      for (let i = 0; i <= endIdx; i++) {
+        const f = processedRawFrames[i];
+        sequenceFrames.push({
           imageData: new ImageData(
-            new Uint8ClampedArray(framesToProcess[0].imageData.data),
-            framesToProcess[0].imageData.width,
-            framesToProcess[0].imageData.height
+            new Uint8ClampedArray(f.imageData.data),
+            f.imageData.width,
+            f.imageData.height
           ),
-          delay: framesToProcess[0].delay
-        };
-
-        for (let i = 1; i < framesToProcess.length; i++) {
-          const nextFrame = framesToProcess[i];
-          const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
-
-          if (diffRatio <= tolerance) {
-            currentFrame.delay += nextFrame.delay;
-          } else {
-            processedFrames.push(currentFrame);
-            currentFrame = {
-              imageData: new ImageData(
-                new Uint8ClampedArray(nextFrame.imageData.data),
-                nextFrame.imageData.width,
-                nextFrame.imageData.height
-              ),
-              delay: nextFrame.delay
-            };
-          }
-        }
-        if (currentFrame) processedFrames.push(currentFrame);
+          delay: f.delay
+        });
       }
 
-      // APNG エンコード
+      // スマート差分圧縮処理（1コマ目のアイキャッチを固定保持し、以降の本編部分を圧縮）
+      processedFrames = [];
+      if (sequenceFrames.length > 0) {
+        processedFrames.push(sequenceFrames[0]); // 1コマ目のアイキャッチは固定
+
+        if (sequenceFrames.length > 1) {
+          let currentFrame = {
+            imageData: new ImageData(
+              new Uint8ClampedArray(sequenceFrames[1].imageData.data),
+              sequenceFrames[1].imageData.width,
+              sequenceFrames[1].imageData.height
+            ),
+            delay: sequenceFrames[1].delay
+          };
+
+          for (let i = 2; i < sequenceFrames.length; i++) {
+            const nextFrame = sequenceFrames[i];
+            const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
+
+            if (diffRatio <= tolerance) {
+              currentFrame.delay += nextFrame.delay; // 差分が許容値以下なら時間加算統合
+            } else {
+              processedFrames.push(currentFrame);
+              currentFrame = {
+                imageData: new ImageData(
+                  new Uint8ClampedArray(nextFrame.imageData.data),
+                  nextFrame.imageData.width,
+                  nextFrame.imageData.height
+                ),
+                delay: nextFrame.delay
+              };
+            }
+          }
+          if (currentFrame) processedFrames.push(currentFrame);
+        }
+      }
+
+      // APNG エンコード (UPNG.js)
       const imgs = processedFrames.map(f => f.imageData.data.buffer);
       const delays = processedFrames.map(f => f.delay);
       const w = previewCanvas.width;
@@ -476,7 +507,7 @@
       warningBanner.classList.toggle('hidden', frameCount <= 20);
       downloadBtn.disabled = false;
 
-      // 生成後のAPNGアニメーションを表示
+      // 生成されたAPNGアニメーションを表示
       if (generatedBlob) {
         const url = URL.createObjectURL(generatedBlob);
         resultImage.src = url;
@@ -507,6 +538,7 @@
       const w = imgData.width;
       const h = imgData.height;
 
+      // 1. クロマキー処理
       for (let i = 0; i < data.length; i += 4) {
         if (data[i+3] === 0) continue;
         const dist = Math.sqrt(
@@ -519,6 +551,7 @@
         }
       }
 
+      // 2. エッジ侵食（フチ削り）
       if (erosionPx > 0) {
         const copy = new Uint8ClampedArray(data);
         for (let y = 0; y < h; y++) {
