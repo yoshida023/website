@@ -9,8 +9,9 @@
   <!-- UPNG.js & pako.js (APNG用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
-  <!-- gifuct-js (GIFデコード用) -->
+  <!-- GIFデコーダーライブラリ (gifuct-js & omggif) -->
   <script src="https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/dist/gifuct-js.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.min.js"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; }
     /* 透過確認用チェック柄背景 */
@@ -88,7 +89,7 @@
         </div>
       </div>
 
-      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー（プレビュー画面のすぐ直下に配置） -->
+      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー（プレビュー画面の直下） -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
@@ -274,7 +275,7 @@
     async function handleFileSelect(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      const file = files[0]; // 単一ファイルの取得
+      const file = files[0]; // 単一ファイルの正常取得
 
       resetPreviewMode();
       rawFrames = [];
@@ -329,23 +330,64 @@
       renderFramePreview(0);
     }
 
-    // GIFデコード (gifuct-js)
+    // GIFデコード (omggif & gifuct-js 両対応フォールバック)
     async function decodeGifFile(file) {
       const arrayBuffer = await file.arrayBuffer();
-      let parseGIF = window.parseGIF;
-      let decompressFrames = window.decompressFrames;
+      
+      // 方法1: omggif (GIF87a / GIF89a 双方に完全対応)
+      if (window.OmgGif || window.gif || window.GifReader) {
+        try {
+          const GifReader = (window.OmgGif && window.OmgGif.GifReader) || (window.gif && window.gif.GifReader) || window.GifReader;
+          if (GifReader) {
+            const buf = new Uint8Array(arrayBuffer);
+            const reader = new GifReader(buf);
+            const w = reader.width;
+            const h = reader.height;
+            const numFrames = reader.numFrames();
 
-      if (!parseGIF && window.gifuct) {
-        parseGIF = window.gifuct.parseGIF;
-        decompressFrames = window.gifuct.decompressFrames;
+            previewCanvas.width = w;
+            previewCanvas.height = h;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            for (let i = 0; i < numFrames; i++) {
+              const frameInfo = reader.frameInfo(i);
+              const frameImgData = tempCtx.createImageData(w, h);
+              reader.decodeAndBlitFrameRGBA(i, frameImgData.data);
+
+              const patchCanvas = document.createElement('canvas');
+              patchCanvas.width = w;
+              patchCanvas.height = h;
+              patchCanvas.getContext('2d').putImageData(frameImgData, 0, 0);
+
+              tempCtx.drawImage(patchCanvas, 0, 0);
+              const fullImgData = tempCtx.getImageData(0, 0, w, h);
+
+              rawFrames.push({
+                imageData: fullImgData,
+                delay: (frameInfo.delay || 10) * 10
+              });
+
+              if (frameInfo.disposal === 2) {
+                tempCtx.clearRect(frameInfo.x, frameInfo.y, frameInfo.width, frameInfo.height);
+              }
+            }
+            if (rawFrames.length > 0) return;
+          }
+        } catch (e) {
+          console.warn('omggif decode fallback to gifuct-js:', e);
+        }
       }
-      if (!parseGIF && window.Gifuct) {
-        parseGIF = window.Gifuct.parseGIF;
-        decompressFrames = window.Gifuct.decompressFrames;
-      }
+
+      // 方法2: gifuct-js
+      let parseGIF = window.parseGIF || (window.gifuct && window.gifuct.parseGIF) || (window.Gifuct && window.Gifuct.parseGIF);
+      let decompressFrames = window.decompressFrames || (window.gifuct && window.gifuct.decompressFrames) || (window.Gifuct && window.Gifuct.decompressFrames);
 
       if (!parseGIF || !decompressFrames) {
-        throw new Error('GIFデコーダーライブラリの読み込みに失敗しました');
+        throw new Error('GIFデコーダーライブラリが読み込まれていません');
       }
 
       const gif = parseGIF(arrayBuffer);
@@ -381,7 +423,7 @@
       });
     }
 
-    // MP4コマ抽出
+    // MP4コマ抽出 (モバイルセーフシーク処理)
     function extractVideoFrames(file) {
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -392,7 +434,7 @@
         const url = URL.createObjectURL(file);
         video.src = url;
 
-        video.onloadeddata = async () => {
+        video.onloadedmetadata = async () => {
           try {
             const w = video.videoWidth || 320;
             const h = video.videoHeight || 320;
@@ -406,13 +448,13 @@
             for (let i = 0; i < totalFrames; i++) {
               const targetTime = i / fps;
               if (Math.abs(video.currentTime - targetTime) > 0.001) {
-                video.currentTime = targetTime;
                 await new Promise((res) => {
                   const onSeeked = () => {
                     video.removeEventListener('seeked', onSeeked);
                     res();
                   };
                   video.addEventListener('seeked', onSeeked);
+                  video.currentTime = targetTime;
                 });
               }
               ctx.drawImage(video, 0, 0, w, h);
