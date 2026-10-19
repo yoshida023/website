@@ -465,7 +465,7 @@
       });
     }
 
-    // MP4コマ抽出 (タイムスタンプ/FPS保持 & シーク保護)
+    // MP4コマ抽出 (元動画高精度30FPSサンプリング ＆ コマ間隔ミリ秒反映)
     function extractVideoFrames(file) {
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -487,12 +487,14 @@
             previewCanvas.width = w;
             previewCanvas.height = h;
 
-            const fps = 10;
+            // 元動画のフレーム表現力を残すため30FPS基準（コマ間隔約33.3ms）で抽出
+            const targetFps = 30;
+            const frameDelay = 1000 / targetFps; // 33.33ms
             const duration = video.duration || 1;
-            const totalFrames = Math.min(Math.floor(duration * fps), 100);
+            const totalFrames = Math.min(Math.floor(duration * targetFps), 120);
 
             for (let i = 0; i < totalFrames; i++) {
-              const targetTime = i / fps;
+              const targetTime = i / targetFps;
               if (Math.abs(video.currentTime - targetTime) > 0.01) {
                 await new Promise((res) => {
                   let resolved = false;
@@ -519,7 +521,7 @@
 
               ctx.drawImage(video, 0, 0, w, h);
               const imgData = ctx.getImageData(0, 0, w, h);
-              rawFrames.push({ imageData: imgData, delay: 1000 / fps });
+              rawFrames.push({ imageData: imgData, delay: frameDelay });
             }
             cleanup();
             resolve();
@@ -617,7 +619,7 @@
       // 2. 元FPS連動スマート差分圧縮処理
       processedFrames = [];
       if (sequenceFrames.length > 0) {
-        processedFrames.push(sequenceFrames[0]); // 1コマ目アイキャッチは圧縮対象外として固定
+        processedFrames.push(sequenceFrames[0]); // 1コマ目アイキャッチは固定
 
         if (sequenceFrames.length > 1) {
           let currentFrame = {
@@ -633,12 +635,13 @@
             const nextFrame = sequenceFrames[i];
             const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
 
-            // 元FPS（コマ遅延時間delay）に連動させた動的許容差感度の適用
-            const fpsScaleFactor = Math.max(0.5, Math.min(2.0, 100 / (nextFrame.delay || 100)));
+            // コマ間遅延時間（delay: 100ms＝10fps、33ms＝30fps）に応じた感度スケーリング
+            // 高FPS（コマ間隔が短い）動画ほど感度倍率を高く補正
+            const fpsScaleFactor = Math.max(0.5, Math.min(3.0, 100 / (nextFrame.delay || 100)));
             const scaledTolerance = userTolerancePct * fpsScaleFactor;
 
             if (diffRatio <= scaledTolerance) {
-              currentFrame.delay += nextFrame.delay; // 許容差内ならコマ統合＆遅延時間加算
+              currentFrame.delay += nextFrame.delay; // 許容差内なら統合して遅延時間合算
             } else {
               processedFrames.push(currentFrame);
               currentFrame = {
@@ -673,7 +676,6 @@
       statDuration.textContent = `${totalSec} 秒`;
       statSize.textContent = `${sizeKB} KB`;
 
-      // 20コマ超過時は警告バナーを表示するが、ダウンロードボタンは常に許可（有効）状態を保持
       warningBanner.classList.toggle('hidden', frameCount <= 20);
       downloadBtn.disabled = false;
 
