@@ -166,10 +166,10 @@
           <input type="range" id="toleranceRange" min="0" max="15" step="0.1" value="3.0" class="w-full h-3 rounded-lg bg-slate-800 appearance-none cursor-pointer">
           
           <div class="grid grid-cols-4 gap-2 text-xs font-mono">
-            <button id="stepMinus1" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">−1.0%</button>
-            <button id="stepMinus01" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">−0.1%</button>
-            <button id="stepPlus01" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">＋0.1%</button>
-            <button id="stepPlus1" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">＋1.0%</button>
+            <button id="stepMinus1" type="button" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">−1.0%</button>
+            <button id="stepMinus01" type="button" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">−0.1%</button>
+            <button id="stepPlus01" type="button" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">＋0.1%</button>
+            <button id="stepPlus1" type="button" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 py-2 rounded-xl border border-slate-700 font-bold transition">＋1.0%</button>
           </div>
         </div>
 
@@ -188,7 +188,7 @@
         <div id="chromaOptions" class="space-y-3 pt-2 border-t border-slate-800 hidden">
           <div class="flex items-center gap-3">
             <input type="color" id="chromaColor" value="#00ff00" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
-            <button id="eyedropperBtn" class="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl border border-slate-700 transition">
+            <button id="eyedropperBtn" type="button" class="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl border border-slate-700 transition">
               🎯 プレビュータップで指定色を取得
             </button>
           </div>
@@ -211,10 +211,10 @@
   <!-- 固定ボトムアクションバー -->
   <div id="bottomBar" class="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur border-t border-slate-800 p-4">
     <div class="max-w-md mx-auto grid grid-cols-2 gap-3">
-      <button id="processBtn" disabled class="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+      <button id="processBtn" type="button" disabled class="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
         <span id="processBtnText">⚡ 圧縮 ＆ APNG生成</span>
       </button>
-      <button id="downloadBtn" disabled class="w-full bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+      <button id="downloadBtn" type="button" disabled class="w-full bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
         <span>📥 ダウンロード</span>
       </button>
     </div>
@@ -310,7 +310,7 @@
       const y = Math.floor((e.clientY - rect.top) * (previewCanvas.height / rect.height));
       const pixel = ctx.getImageData(x, y, 1, 1).data;
       
-      const hex = "#" + [pixel, pixel, pixel].map(x => x.toString(16).padStart(2, '0')).join('');
+      const hex = "#" + [pixel[0], pixel[1], pixel[2]].map(x => x.toString(16).padStart(2, '0')).join('');
       chromaColor.value = hex;
 
       chromaToggle.checked = true;
@@ -372,6 +372,7 @@
 
     // 先頭ブランクコマ自動判定
     function isBlankFrame(imgData) {
+      if (!imgData) return true;
       const data = imgData.data;
       if (!data || data.length === 0) return true;
 
@@ -384,10 +385,10 @@
       }
       if (allTransparent) return true;
 
-      const firstR = data;
-      const firstG = data;
-      const firstB = data;
-      const firstA = data;
+      const firstR = data[0];
+      const firstG = data[1];
+      const firstB = data[2];
+      const firstA = data[3];
 
       let maxDiff = 0;
       for (let i = 0; i < data.length; i += 16) {
@@ -405,7 +406,7 @@
     async function handleFileSelect(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      const file = files;
+      const file = files[0];
 
       resetPreviewMode();
       rawFrames = [];
@@ -444,7 +445,7 @@
       }
 
       // 先頭ブランクコマ自動除外
-      while (rawFrames.length > 1 && isBlankFrame(rawFrames.imageData)) {
+      while (rawFrames.length > 1 && isBlankFrame(rawFrames[0].imageData)) {
         rawFrames.shift();
       }
 
@@ -755,7 +756,7 @@
               // 許容差内であっても、本編の最終コマ（終端コマ）は削らずに視覚的キーフレームとして保護・更新する
               if (diffRatio <= scaledTolerance && !isLastFrame) {
                 currentFrame.delay += nextFrame.delay;
-                // 統合中の画像データを最新コマ画像に更新し、アニメーションが途中で巻き戻ったり止まって見えないように補正
+                // 統合中の画像データを最新コマ画像に更新
                 currentFrame.imageData = new ImageData(
                   new Uint8ClampedArray(nextFrame.imageData.data),
                   nextFrame.imageData.width,
@@ -840,9 +841,9 @@
       for (let i = 0; i < data.length; i += 4) {
         if (data[i+3] === 0) continue;
         const dist = Math.sqrt(
-          Math.pow(data[i] - targetRGB, 2) +
-          Math.pow(data[i+1] - targetRGB, 2) +
-          Math.pow(data[i+2] - targetRGB, 2)
+          Math.pow(data[i] - targetRGB[0], 2) +
+          Math.pow(data[i+1] - targetRGB[1], 2) +
+          Math.pow(data[i+2] - targetRGB[2], 2)
         );
         if (dist < 65) {
           data[i+3] = 0;
