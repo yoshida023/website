@@ -149,13 +149,26 @@
     <!-- 3. 編集コントロール -->
     <section id="controlsSection" class="hidden space-y-3">
 
-      <!-- 📐 縦横比維持リサイズ (%指定) -->
+      <!-- 📐 縦横比維持リサイズ (%指定) ＆ サイズ比較表示 -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="flex justify-between items-center">
           <label class="text-xs font-semibold text-slate-300">
             <span>📐 画像サイズ縮小指定 (%)</span>
           </label>
           <span id="scaleVal" class="text-sm font-mono text-emerald-400 font-bold bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">100 %（縮小なし）</span>
+        </div>
+
+        <!-- 🖼️ 変更前 ➔ 変更後の画像サイズ (幅×高さ) 比較バッジ -->
+        <div id="dimensionBox" class="bg-slate-950/80 rounded-xl p-2.5 border border-slate-800 text-xs font-mono flex items-center justify-between">
+          <div class="text-slate-400">
+            <span>元サイズ: </span>
+            <span id="origDimension" class="text-slate-200 font-bold">- × - px</span>
+          </div>
+          <span class="text-slate-500">➔</span>
+          <div class="text-emerald-400">
+            <span>リサイズ後: </span>
+            <span id="scaledDimension" class="font-bold">- × - px</span>
+          </div>
         </div>
 
         <div class="space-y-2">
@@ -255,6 +268,8 @@
     
     const scaleRange = document.getElementById('scaleRange');
     const scaleVal = document.getElementById('scaleVal');
+    const origDimension = document.getElementById('origDimension');
+    const scaledDimension = document.getElementById('scaledDimension');
     const scaleBtn25 = document.getElementById('scaleBtn25');
     const scaleBtn50 = document.getElementById('scaleBtn50');
     const scaleBtn75 = document.getElementById('scaleBtn75');
@@ -464,6 +479,11 @@
       };
     }
 
+    function updateDimensionUI(origW, origH, scaledW, scaledH) {
+      origDimension.textContent = `${origW} × ${origH} px`;
+      scaledDimension.textContent = `${scaledW} × ${scaledH} px`;
+    }
+
     async function handleFileSelect(e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
@@ -491,6 +511,8 @@
           const rgbaBufs = UPNG.toRGBA8(img);
           
           const dim = getScaledDimensions(img.width, img.height, scalePct);
+          updateDimensionUI(img.width, img.height, dim.w, dim.h);
+
           previewCanvas.width = dim.w;
           previewCanvas.height = dim.h;
 
@@ -556,7 +578,7 @@
       renderFramePreview(0);
     }
 
-    // GIFデコード (%指定縮小対応)
+    // GIFデコード (%指定縮小対応 ＆ サイズ表示更新)
     async function decodeGifFile(file, scalePct) {
       const arrayBuffer = await file.arrayBuffer();
       
@@ -571,6 +593,8 @@
             const numFrames = reader.numFrames();
 
             const dim = getScaledDimensions(w, h, scalePct);
+            updateDimensionUI(w, h, dim.w, dim.h);
+
             previewCanvas.width = dim.w;
             previewCanvas.height = dim.h;
 
@@ -629,6 +653,8 @@
       const h = gif.lsd.height;
 
       const dim = getScaledDimensions(w, h, scalePct);
+      updateDimensionUI(w, h, dim.w, dim.h);
+
       previewCanvas.width = dim.w;
       previewCanvas.height = dim.h;
 
@@ -666,7 +692,7 @@
       });
     }
 
-    // MP4コマ抽出 (%指定縮小対応)
+    // MP4コマ抽出 (%指定縮小対応 ＆ サイズ表示更新)
     function extractVideoFrames(file, scalePct) {
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -686,6 +712,7 @@
             const rawW = video.videoWidth || 320;
             const rawH = video.videoHeight || 320;
             const dim = getScaledDimensions(rawW, rawH, scalePct);
+            updateDimensionUI(rawW, rawH, dim.w, dim.h);
 
             previewCanvas.width = dim.w;
             previewCanvas.height = dim.h;
@@ -957,9 +984,9 @@
       for (let i = 0; i < data.length; i += 4) {
         if (data[i+3] === 0) continue;
         const dist = Math.sqrt(
-          Math.pow(data[i] - targetRGB[0], 2) +
-          Math.pow(data[i+1] - targetRGB[1], 2) +
-          Math.pow(data[i+2] - targetRGB[2], 2)
+          Math.pow(data[i] - targetRGB, 2) +
+          Math.pow(data[i+1] - targetRGB, 2) +
+          Math.pow(data[i+2] - targetRGB, 2)
         );
         if (dist < 65) {
           data[i+3] = 0;
@@ -999,7 +1026,8 @@
 
     function downloadAPNG() {
       if (!generatedBlob) return;
-      const url = URL.createObjectURL(generatedBlob);
+      const url = URL.click ? URL.createObjectURL(generatedBlob) : null;
+      if (!url) return;
       const a = document.createElement('a');
       a.href = url;
       a.download = `stamp_${Date.now()}.png`;
