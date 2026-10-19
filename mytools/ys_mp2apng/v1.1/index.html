@@ -465,7 +465,7 @@
       });
     }
 
-    // MP4コマ抽出 (タイムスタンプ/FPS保持)
+    // MP4コマ抽出 (タイムスタンプ/FPS保持 & シーク保護)
     function extractVideoFrames(file) {
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -493,14 +493,29 @@
 
             for (let i = 0; i < totalFrames; i++) {
               const targetTime = i / fps;
-              await new Promise((res) => {
-                const onSeeked = () => {
-                  video.removeEventListener('seeked', onSeeked);
-                  res();
-                };
-                video.addEventListener('seeked', onSeeked);
-                video.currentTime = targetTime === 0 ? 0.001 : targetTime;
-              });
+              if (Math.abs(video.currentTime - targetTime) > 0.01) {
+                await new Promise((res) => {
+                  let resolved = false;
+                  const timer = setTimeout(() => {
+                    if (!resolved) {
+                      resolved = true;
+                      video.removeEventListener('seeked', onSeeked);
+                      res();
+                    }
+                  }, 300);
+
+                  const onSeeked = () => {
+                    if (!resolved) {
+                      resolved = true;
+                      clearTimeout(timer);
+                      video.removeEventListener('seeked', onSeeked);
+                      res();
+                    }
+                  };
+                  video.addEventListener('seeked', onSeeked);
+                  video.currentTime = targetTime;
+                });
+              }
 
               ctx.drawImage(video, 0, 0, w, h);
               const imgData = ctx.getImageData(0, 0, w, h);
@@ -619,7 +634,6 @@
             const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
 
             // 元FPS（コマ遅延時間delay）に連動させた動的許容差感度の適用
-            // コマ間隔が短い（高FPS）ほど感度を微調整して動きをなめらかに保つ
             const fpsScaleFactor = Math.max(0.5, Math.min(2.0, 100 / (nextFrame.delay || 100)));
             const scaledTolerance = userTolerancePct * fpsScaleFactor;
 
