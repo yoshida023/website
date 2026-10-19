@@ -89,28 +89,42 @@
         </div>
       </div>
 
-      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー -->
+      <!-- 🏁 アイキャッチ指定 ＆ 本編トリミング（開始・終端コマ）コントロール -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <!-- アイキャッチコマ（カバー画像: 0.01s表示） -->
         <div class="space-y-1">
           <div class="flex justify-between text-xs">
             <span class="text-slate-200 font-semibold flex items-center gap-1">
-              <span>🏁 先頭コマ（アイキャッチ: 0.01s）指定</span>
+              <span>🏁 カバー画像（アイキャッチ: 0.01s）コマ</span>
             </span>
-            <span id="startFrameVal" class="font-mono text-emerald-400 font-bold">1 コマ目</span>
+            <span id="coverFrameVal" class="font-mono text-emerald-400 font-bold">1 コマ目</span>
           </div>
-          <input type="range" id="startFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
-          <p class="text-[11px] text-slate-400">画面を見ながらカバー画像（1コマ目）にするコマを指定します。</p>
+          <input type="range" id="coverFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
+          <p class="text-[11px] text-slate-400">スタンプ一覧や送信時に固定表示される1コマ目（カバー画像）を指定します。</p>
         </div>
 
+        <!-- 本編再生の開始コマ（前方トリミング） -->
         <div class="space-y-1 pt-2 border-t border-slate-800">
           <div class="flex justify-between text-xs">
             <span class="text-slate-200 font-semibold flex items-center gap-1">
-              <span>✂️ 終端コマ（後方カット）指定</span>
+              <span>✂️ 本編の開始コマ（前方トリミング）</span>
             </span>
-            <span id="endFrameVal" class="font-mono text-emerald-400 font-bold">全コマ</span>
+            <span id="startFrameVal" class="font-mono text-cyan-400 font-bold">1 コマ目</span>
           </div>
-          <input type="range" id="endFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
-          <p class="text-[11px] text-slate-400">動画の最初（0コマ目）から指定したコマまでを再生範囲にします。</p>
+          <input type="range" id="startFrameRange" min="0" max="0" value="0" class="w-full accent-cyan-500">
+          <p class="text-[11px] text-slate-400">アニメーション再生を開始するコマを指定します。</p>
+        </div>
+
+        <!-- 本編再生の終端コマ（後方トリミング） -->
+        <div class="space-y-1 pt-2 border-t border-slate-800">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-200 font-semibold flex items-center gap-1">
+              <span>✂️ 本編の終端コマ（後方トリミング）</span>
+            </span>
+            <span id="endFrameVal" class="font-mono text-cyan-400 font-bold">全コマ</span>
+          </div>
+          <input type="range" id="endFrameRange" min="0" max="0" value="0" class="w-full accent-cyan-500">
+          <p class="text-[11px] text-slate-400">アニメーション再生を終了するコマを指定します。</p>
         </div>
       </div>
 
@@ -167,7 +181,7 @@
   <div id="bottomBar" class="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur border-t border-slate-800 p-4">
     <div class="max-w-md mx-auto grid grid-cols-2 gap-3">
       <button id="processBtn" disabled class="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
-        <span>⚡ 圧縮 ＆ APNG生成</span>
+        <span id="processBtnText">⚡ 圧縮 ＆ APNG生成</span>
       </button>
       <button id="downloadBtn" disabled class="w-full bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
         <span>📥 ダウンロード</span>
@@ -198,6 +212,8 @@
     const erosionRange = document.getElementById('erosionRange');
     const erosionVal = document.getElementById('erosionVal');
     
+    const coverFrameRange = document.getElementById('coverFrameRange');
+    const coverFrameVal = document.getElementById('coverFrameVal');
     const startFrameRange = document.getElementById('startFrameRange');
     const startFrameVal = document.getElementById('startFrameVal');
     const endFrameRange = document.getElementById('endFrameRange');
@@ -210,6 +226,7 @@
     const playStateBadge = document.getElementById('playStateBadge');
 
     const processBtn = document.getElementById('processBtn');
+    const processBtnText = document.getElementById('processBtnText');
     const downloadBtn = document.getElementById('downloadBtn');
 
     fileInput.addEventListener('change', handleFileSelect);
@@ -217,16 +234,16 @@
     toleranceRange.addEventListener('input', (e) => toleranceVal.textContent = `${e.target.value} %`);
     erosionRange.addEventListener('input', (e) => {
       erosionVal.textContent = `${e.target.value} px`;
-      renderFramePreview(parseInt(startFrameRange.value));
+      renderFramePreview(parseInt(coverFrameRange.value));
     });
 
     chromaToggle.addEventListener('change', (e) => {
       chromaOptions.classList.toggle('hidden', !e.target.checked);
-      renderFramePreview(parseInt(startFrameRange.value));
+      renderFramePreview(parseInt(coverFrameRange.value));
     });
 
     chromaColor.addEventListener('input', () => {
-      renderFramePreview(parseInt(startFrameRange.value));
+      renderFramePreview(parseInt(coverFrameRange.value));
     });
 
     eyedropperBtn.addEventListener('click', () => {
@@ -253,21 +270,45 @@
       eyedropperIndicator.classList.add('hidden');
       eyedropperBtn.classList.remove('bg-emerald-600');
       
-      renderFramePreview(parseInt(startFrameRange.value));
+      renderFramePreview(parseInt(coverFrameRange.value));
     });
 
+    // カバーコマ（アイキャッチ）スライダー
+    coverFrameRange.addEventListener('input', (e) => {
+      resetPreviewMode();
+      const idx = parseInt(e.target.value);
+      coverFrameVal.textContent = `${idx + 1} コマ目`;
+      renderFramePreview(idx);
+    });
+
+    // 本編開始コマ（前方トリミング）スライダー
     startFrameRange.addEventListener('input', (e) => {
       resetPreviewMode();
-      const idx = parseInt(e.target.value);
-      startFrameVal.textContent = `${idx + 1} コマ目`;
-      renderFramePreview(idx);
+      let startIdx = parseInt(e.target.value);
+      let endIdx = parseInt(endFrameRange.value);
+
+      if (startIdx > endIdx) {
+        endFrameRange.value = startIdx;
+        endFrameVal.textContent = `${startIdx + 1} コマ目`;
+      }
+
+      startFrameVal.textContent = `${startIdx + 1} コマ目`;
+      renderFramePreview(startIdx);
     });
 
+    // 本編終端コマ（後方トリミング）スライダー
     endFrameRange.addEventListener('input', (e) => {
       resetPreviewMode();
-      const idx = parseInt(e.target.value);
-      endFrameVal.textContent = `${idx + 1} コマ目`;
-      renderFramePreview(idx);
+      let endIdx = parseInt(e.target.value);
+      let startIdx = parseInt(startFrameRange.value);
+
+      if (endIdx < startIdx) {
+        startFrameRange.value = endIdx;
+        startFrameVal.textContent = `${endIdx + 1} コマ目`;
+      }
+
+      endFrameVal.textContent = `${endIdx + 1} コマ目`;
+      renderFramePreview(endIdx);
     });
 
     processBtn.addEventListener('click', processAndGenerateAPNG);
@@ -357,14 +398,21 @@
         rawFrames.shift();
       }
 
+      const totalNum = rawFrames.length - 1;
+
+      coverFrameRange.min = 0;
+      coverFrameRange.max = totalNum;
+      coverFrameRange.value = 0;
+      coverFrameVal.textContent = `1 コマ目`;
+
       startFrameRange.min = 0;
-      startFrameRange.max = rawFrames.length - 1;
+      startFrameRange.max = totalNum;
       startFrameRange.value = 0;
       startFrameVal.textContent = `1 コマ目`;
 
       endFrameRange.min = 0;
-      endFrameRange.max = rawFrames.length - 1;
-      endFrameRange.value = rawFrames.length - 1;
+      endFrameRange.max = totalNum;
+      endFrameRange.value = totalNum;
       endFrameVal.textContent = `${rawFrames.length} コマ目`;
 
       previewSection.classList.remove('hidden');
@@ -465,7 +513,7 @@
       });
     }
 
-    // MP4コマ抽出 (元動画高精度30FPSサンプリング ＆ コマ間隔ミリ秒反映)
+    // MP4コマ抽出
     function extractVideoFrames(file) {
       return new Promise((resolve, reject) => {
         const video = document.createElement('video');
@@ -487,9 +535,8 @@
             previewCanvas.width = w;
             previewCanvas.height = h;
 
-            // 元動画のフレーム表現力を残すため30FPS基準（コマ間隔約33.3ms）で抽出
             const targetFps = 30;
-            const frameDelay = 1000 / targetFps; // 33.33ms
+            const frameDelay = 1000 / targetFps;
             const duration = video.duration || 1;
             const totalFrames = Math.min(Math.floor(duration * targetFps), 120);
 
@@ -564,128 +611,152 @@
       resetPreviewMode();
       if (rawFrames.length === 0) return;
 
-      const coverIdx = parseInt(startFrameRange.value);
-      const endIdx = parseInt(endFrameRange.value);
-      const userTolerancePct = parseFloat(toleranceRange.value) / 100;
-      const doChroma = chromaToggle.checked;
-      const erosionPx = parseInt(erosionRange.value);
+      // ボタンをローディング表示にする
+      processBtn.disabled = true;
+      processBtnText.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-slate-950 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>⏳ APNG変換処理中...</span>
+      `;
 
-      let targetRGB = null;
-      if (doChroma) {
-        const hex = chromaColor.value;
-        targetRGB = [
-          parseInt(hex.slice(1,3), 16),
-          parseInt(hex.slice(3,5), 16),
-          parseInt(hex.slice(5,7), 16)
-        ];
-      }
+      // UIを更新させてローディングスピナーを描画するためのウェイト
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      // 1. 全コマへのクロマキー＆エッジ侵食の適用
-      const processedRawFrames = rawFrames.map(f => {
-        const imgData = new ImageData(new Uint8ClampedArray(f.imageData.data), f.imageData.width, f.imageData.height);
-        if (doChroma && targetRGB) {
-          applyChromaKeyAndErosion(imgData, targetRGB, erosionPx);
+      try {
+        const coverIdx = parseInt(coverFrameRange.value);
+        const startIdx = parseInt(startFrameRange.value);
+        const endIdx = parseInt(endFrameRange.value);
+        const userTolerancePct = parseFloat(toleranceRange.value) / 100;
+        const doChroma = chromaToggle.checked;
+        const erosionPx = parseInt(erosionRange.value);
+
+        let targetRGB = null;
+        if (doChroma) {
+          const hex = chromaColor.value;
+          targetRGB = [
+            parseInt(hex.slice(1,3), 16),
+            parseInt(hex.slice(3,5), 16),
+            parseInt(hex.slice(5,7), 16)
+          ];
         }
-        return { imageData: imgData, delay: f.delay };
-      });
 
-      const sequenceFrames = [];
-
-      // 【1コマ目】指定アイキャッチコマ (0.01s / 10ms固定)
-      if (processedRawFrames[coverIdx]) {
-        sequenceFrames.push({
-          imageData: new ImageData(
-            new Uint8ClampedArray(processedRawFrames[coverIdx].imageData.data),
-            processedRawFrames[coverIdx].imageData.width,
-            processedRawFrames[coverIdx].imageData.height
-          ),
-          delay: 10
-        });
-      }
-
-      // 【2コマ目以降】元動画の0コマ目〜指定終端コマ(endIdx)まで
-      for (let i = 0; i <= endIdx; i++) {
-        const f = processedRawFrames[i];
-        sequenceFrames.push({
-          imageData: new ImageData(
-            new Uint8ClampedArray(f.imageData.data),
-            f.imageData.width,
-            f.imageData.height
-          ),
-          delay: f.delay
-        });
-      }
-
-      // 2. 元FPS連動スマート差分圧縮処理
-      processedFrames = [];
-      if (sequenceFrames.length > 0) {
-        processedFrames.push(sequenceFrames[0]); // 1コマ目アイキャッチは固定
-
-        if (sequenceFrames.length > 1) {
-          let currentFrame = {
-            imageData: new ImageData(
-              new Uint8ClampedArray(sequenceFrames[1].imageData.data),
-              sequenceFrames[1].imageData.width,
-              sequenceFrames[1].imageData.height
-            ),
-            delay: sequenceFrames[1].delay
-          };
-
-          for (let i = 2; i < sequenceFrames.length; i++) {
-            const nextFrame = sequenceFrames[i];
-            const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
-
-            // コマ間遅延時間（delay: 100ms＝10fps、33ms＝30fps）に応じた感度スケーリング
-            // 高FPS（コマ間隔が短い）動画ほど感度倍率を高く補正
-            const fpsScaleFactor = Math.max(0.5, Math.min(3.0, 100 / (nextFrame.delay || 100)));
-            const scaledTolerance = userTolerancePct * fpsScaleFactor;
-
-            if (diffRatio <= scaledTolerance) {
-              currentFrame.delay += nextFrame.delay; // 許容差内なら統合して遅延時間合算
-            } else {
-              processedFrames.push(currentFrame);
-              currentFrame = {
-                imageData: new ImageData(
-                  new Uint8ClampedArray(nextFrame.imageData.data),
-                  nextFrame.imageData.width,
-                  nextFrame.imageData.height
-                ),
-                delay: nextFrame.delay
-              };
-            }
+        // 1. 全コマへのクロマキー＆エッジ侵食の適用
+        const processedRawFrames = rawFrames.map(f => {
+          const imgData = new ImageData(new Uint8ClampedArray(f.imageData.data), f.imageData.width, f.imageData.height);
+          if (doChroma && targetRGB) {
+            applyChromaKeyAndErosion(imgData, targetRGB, erosionPx);
           }
-          if (currentFrame) processedFrames.push(currentFrame);
+          return { imageData: imgData, delay: f.delay };
+        });
+
+        const sequenceFrames = [];
+
+        // 【1コマ目】指定されたアイキャッチコマ (0.01s / 10ms固定表示)
+        if (processedRawFrames[coverIdx]) {
+          sequenceFrames.push({
+            imageData: new ImageData(
+              new Uint8ClampedArray(processedRawFrames[coverIdx].imageData.data),
+              processedRawFrames[coverIdx].imageData.width,
+              processedRawFrames[coverIdx].imageData.height
+            ),
+            delay: 10
+          });
         }
-      }
 
-      // 3. APNG エンコード
-      const imgs = processedFrames.map(f => f.imageData.data.buffer);
-      const delays = processedFrames.map(f => f.delay);
-      const w = previewCanvas.width;
-      const h = previewCanvas.height;
+        // 【2コマ目以降】指定された開始コマ(startIdx)〜終端コマ(endIdx)の本編シーケンス
+        for (let i = startIdx; i <= endIdx; i++) {
+          const f = processedRawFrames[i];
+          if (f) {
+            sequenceFrames.push({
+              imageData: new ImageData(
+                new Uint8ClampedArray(f.imageData.data),
+                f.imageData.width,
+                f.imageData.height
+              ),
+              delay: f.delay
+            });
+          }
+        }
 
-      const apngBuffer = UPNG.encode(imgs, w, h, 0, delays);
-      generatedBlob = new Blob([apngBuffer], { type: 'image/png' });
+        // 2. 元FPS連動スマート差分圧縮処理
+        processedFrames = [];
+        if (sequenceFrames.length > 0) {
+          // 1コマ目のアイキャッチ（カバー画像）は固定枠として保持
+          processedFrames.push(sequenceFrames[0]);
 
-      // メトリクス更新 ＆ 20コマ超過警告判定
-      const frameCount = processedFrames.length;
-      const totalSec = (delays.reduce((a, b) => a + b, 0) / 1000).toFixed(2);
-      const sizeKB = (generatedBlob.size / 1024).toFixed(0);
+          if (sequenceFrames.length > 1) {
+            let currentFrame = {
+              imageData: new ImageData(
+                new Uint8ClampedArray(sequenceFrames[1].imageData.data),
+                sequenceFrames[1].imageData.width,
+                sequenceFrames[1].imageData.height
+              ),
+              delay: sequenceFrames[1].delay
+            };
 
-      statFrames.textContent = `${frameCount} / 20`;
-      statDuration.textContent = `${totalSec} 秒`;
-      statSize.textContent = `${sizeKB} KB`;
+            for (let i = 2; i < sequenceFrames.length; i++) {
+              const nextFrame = sequenceFrames[i];
+              const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
 
-      warningBanner.classList.toggle('hidden', frameCount <= 20);
-      downloadBtn.disabled = false;
+              const fpsScaleFactor = Math.max(0.5, Math.min(3.0, 100 / (nextFrame.delay || 100)));
+              const scaledTolerance = userTolerancePct * fpsScaleFactor;
 
-      // 生成APNGのアニメーション再生プレビュー表示
-      if (generatedBlob) {
-        const url = URL.createObjectURL(generatedBlob);
-        resultImage.src = url;
-        previewCanvas.classList.add('hidden');
-        resultImage.classList.remove('hidden');
-        playStateBadge.classList.remove('hidden');
+              if (diffRatio <= scaledTolerance) {
+                currentFrame.delay += nextFrame.delay;
+              } else {
+                processedFrames.push(currentFrame);
+                currentFrame = {
+                  imageData: new ImageData(
+                    new Uint8ClampedArray(nextFrame.imageData.data),
+                    nextFrame.imageData.width,
+                    nextFrame.imageData.height
+                  ),
+                  delay: nextFrame.delay
+                };
+              }
+            }
+            if (currentFrame) processedFrames.push(currentFrame);
+          }
+        }
+
+        // 3. APNG エンコード
+        const imgs = processedFrames.map(f => f.imageData.data.buffer);
+        const delays = processedFrames.map(f => f.delay);
+        const w = previewCanvas.width;
+        const h = previewCanvas.height;
+
+        const apngBuffer = UPNG.encode(imgs, w, h, 0, delays);
+        generatedBlob = new Blob([apngBuffer], { type: 'image/png' });
+
+        // メトリクス更新 ＆ 20コマ超過警告判定
+        const frameCount = processedFrames.length;
+        const totalSec = (delays.reduce((a, b) => a + b, 0) / 1000).toFixed(2);
+        const sizeKB = (generatedBlob.size / 1024).toFixed(0);
+
+        statFrames.textContent = `${frameCount} / 20`;
+        statDuration.textContent = `${totalSec} 秒`;
+        statSize.textContent = `${sizeKB} KB`;
+
+        warningBanner.classList.toggle('hidden', frameCount <= 20);
+        downloadBtn.disabled = false;
+
+        // 生成APNGのアニメーション再生プレビュー表示
+        if (generatedBlob) {
+          const url = URL.createObjectURL(generatedBlob);
+          resultImage.src = url;
+          previewCanvas.classList.add('hidden');
+          resultImage.classList.remove('hidden');
+          playStateBadge.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error('APNG generation error:', err);
+        alert('APNGの生成に失敗しました。');
+      } finally {
+        // ボタン表示の復元
+        processBtn.disabled = false;
+        processBtnText.innerHTML = `⚡ 圧縮 ＆ APNG生成`;
       }
     }
 
@@ -720,7 +791,7 @@
           Math.pow(data[i+2] - targetRGB[2], 2)
         );
         if (dist < 65) {
-          data[i+3] = 0; // 透過設定
+          data[i+3] = 0;
         }
       }
 
