@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LINEスタンプ用 APNG変換</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- UPNG.js & pako.js (APNG用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+  <!-- GIFデコーダーライブラリ (gifuct-js & omggif) -->
+  <script src="https://cdn.jsdelivr.net/npm/gifuct-js@2.1.2/dist/gifuct-js.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.min.js"></script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    /* 透過確認用チェック柄背景 */
+    .checkerboard {
+      background-color: #1e293b;
+      background-image: 
+        linear-gradient(45deg, #334155 25%, transparent 25%),
+        linear-gradient(-45deg, #334155 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #334155 75%),
+        linear-gradient(-45deg, transparent 75%, #334155 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen pb-32 font-sans select-none">
+
+  <!-- ヘッダー -->
+  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 text-center">
+    <h1 class="text-lg font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+      LINEスタンプ用 APNG変換
+    </h1>
+    <p class="text-xs text-slate-400 mt-0.5">スマホ完結・自動フレーム圧縮 ＆ 透過維持</p>
+  </header>
+
+  <main class="max-w-md mx-auto p-4 space-y-4">
+
+    <!-- 1. ファイル選択エリア -->
+    <label id="dropZone" for="fileInput" class="relative block border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-2xl p-6 text-center bg-slate-900/50 cursor-pointer transition">
+      <input type="file" id="fileInput" accept="image/gif,image/png,image/apng,video/mp4,.gif,.apng,.png,.mp4" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+      <div class="space-y-2 pointer-events-none">
+        <div class="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-2xl">
+          📁
+        </div>
+        <p class="text-sm font-semibold text-slate-200">ファイルをタップして選択</p>
+        <p class="text-xs text-slate-400">MP4 / GIF / 透過GIF / APNG / 透過APNG</p>
+      </div>
+    </label>
+
+    <!-- 2. プレビュー ＆ コマ指定（プレビュー直下に配置） -->
+    <section id="previewSection" class="hidden space-y-3">
+      <!-- メトリクスバッジ -->
+      <div class="grid grid-cols-3 gap-2 text-center text-xs">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5">
+          <span class="block text-slate-400 text-[10px] mb-0.5">コマ数</span>
+          <span id="statFrames" class="font-bold text-sm text-emerald-400">0 / 20</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5">
+          <span class="block text-slate-400 text-[10px] mb-0.5">再生秒数</span>
+          <span id="statDuration" class="font-bold text-sm text-cyan-400">0.00 秒</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5">
+          <span class="block text-slate-400 text-[10px] mb-0.5">容量</span>
+          <span id="statSize" class="font-bold text-sm text-indigo-400">0 KB</span>
+        </div>
+      </div>
+
+      <!-- 超過警告バナー -->
+      <div id="warningBanner" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-300 flex items-center gap-2">
+        <span class="text-base">⚠️</span>
+        <span>LINE推奨の最大20コマを超過しています（ダウンロードは可能です）。</span>
+      </div>
+
+      <!-- プレビュー画面 -->
+      <div class="relative rounded-2xl overflow-hidden border border-slate-800 checkerboard flex items-center justify-center min-h-[240px]">
+        <canvas id="previewCanvas" class="max-w-full max-h-[300px] object-contain cursor-crosshair"></canvas>
+        <img id="resultImage" class="hidden max-w-full max-h-[300px] object-contain" alt="生成APNG">
+        
+        <div id="eyedropperIndicator" class="hidden absolute top-3 left-3 bg-slate-900/90 px-3 py-1.5 rounded-full text-xs text-emerald-400 border border-emerald-500/30 animate-pulse">
+          🎯 画面をタップして背景色を取得
+        </div>
+        <div id="playStateBadge" class="hidden absolute top-3 right-3 bg-slate-900/80 px-2.5 py-1 rounded-full text-[10px] text-slate-300 border border-slate-700 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>▶ アニメーション再生中</span>
+        </div>
+      </div>
+
+      <!-- 🏁 先頭コマ（アイキャッチ: 0.01s）指定 ＆ 終端コマ指定スライダー -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-200 font-semibold flex items-center gap-1">
+              <span>🏁 先頭コマ（アイキャッチ: 0.01s）指定</span>
+            </span>
+            <span id="startFrameVal" class="font-mono text-emerald-400 font-bold">1 コマ目</span>
+          </div>
+          <input type="range" id="startFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
+          <p class="text-[11px] text-slate-400">画面を見ながらカバー画像（1コマ目）にするコマを指定します。</p>
+        </div>
+
+        <div class="space-y-1 pt-2 border-t border-slate-800">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-200 font-semibold flex items-center gap-1">
+              <span>✂️ 終端コマ（後方カット）指定</span>
+            </span>
+            <span id="endFrameVal" class="font-mono text-emerald-400 font-bold">全コマ</span>
+          </div>
+          <input type="range" id="endFrameRange" min="0" max="0" value="0" class="w-full accent-emerald-500">
+          <p class="text-[11px] text-slate-400">動画の最初（0コマ目）から指定したコマまでを再生範囲にします。</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 3. 編集コントロール -->
+    <section id="controlsSection" class="hidden space-y-3">
+
+      <!-- ⚙️ スマートフレーム圧縮 (元FPS連動) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div class="flex justify-between items-center">
+          <label class="text-xs font-semibold text-slate-300">
+            <span>⚙️ スマート差分圧縮 (許容差%)</span>
+          </label>
+          <span id="toleranceVal" class="text-xs font-mono text-emerald-400 font-bold">3 %</span>
+        </div>
+        <input type="range" id="toleranceRange" min="0" max="15" step="0.5" value="3" class="w-full accent-emerald-500">
+        <p class="text-[11px] text-slate-400">元動画のFPS/タイムスタンプに自動連動し、変化の少ないコマを統合して軽量化します。</p>
+      </div>
+
+      <!-- 🎨 クロマキー ＆ エッジ侵食 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="text-xs font-semibold text-slate-300">
+            <span>🎨 クロマキー（指定色透過）</span>
+          </label>
+          <input type="checkbox" id="chromaToggle" class="w-4 h-4 accent-emerald-500">
+        </div>
+
+        <div id="chromaOptions" class="space-y-3 pt-2 border-t border-slate-800 hidden">
+          <div class="flex items-center gap-3">
+            <input type="color" id="chromaColor" value="#00ff00" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+            <button id="eyedropperBtn" class="flex-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl border border-slate-700 transition">
+              🎯 プレビュータップで指定色を取得
+            </button>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">✂️ エッジ侵食（フチ削り）</span>
+              <span id="erosionVal" class="font-mono text-emerald-400">1 px</span>
+            </div>
+            <input type="range" id="erosionRange" min="0" max="5" step="1" value="1" class="w-full accent-emerald-500">
+            <p class="text-[11px] text-slate-400">透過輪郭に残る背景フチの色を指定ピクセル分削り取ります。</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- 固定ボトムアクションバー -->
+  <div id="bottomBar" class="fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur border-t border-slate-800 p-4">
+    <div class="max-w-md mx-auto grid grid-cols-2 gap-3">
+      <button id="processBtn" disabled class="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+        <span>⚡ 圧縮 ＆ APNG生成</span>
+      </button>
+      <button id="downloadBtn" disabled class="w-full bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 text-slate-950 font-bold py-3.5 px-4 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+        <span>📥 ダウンロード</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let rawFrames = [];
+    let processedFrames = [];
+    let generatedBlob = null;
+    let isEyedropperActive = false;
+
+    const fileInput = document.getElementById('fileInput');
+    const previewSection = document.getElementById('previewSection');
+    const controlsSection = document.getElementById('controlsSection');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const resultImage = document.getElementById('resultImage');
+    const ctx = previewCanvas.getContext('2d');
+    
+    const toleranceRange = document.getElementById('toleranceRange');
+    const toleranceVal = document.getElementById('toleranceVal');
+    const chromaToggle = document.getElementById('chromaToggle');
+    const chromaOptions = document.getElementById('chromaOptions');
+    const chromaColor = document.getElementById('chromaColor');
+    const eyedropperBtn = document.getElementById('eyedropperBtn');
+    const eyedropperIndicator = document.getElementById('eyedropperIndicator');
+    const erosionRange = document.getElementById('erosionRange');
+    const erosionVal = document.getElementById('erosionVal');
+    
+    const startFrameRange = document.getElementById('startFrameRange');
+    const startFrameVal = document.getElementById('startFrameVal');
+    const endFrameRange = document.getElementById('endFrameRange');
+    const endFrameVal = document.getElementById('endFrameVal');
+
+    const statFrames = document.getElementById('statFrames');
+    const statDuration = document.getElementById('statDuration');
+    const statSize = document.getElementById('statSize');
+    const warningBanner = document.getElementById('warningBanner');
+    const playStateBadge = document.getElementById('playStateBadge');
+
+    const processBtn = document.getElementById('processBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    fileInput.addEventListener('change', handleFileSelect);
+
+    toleranceRange.addEventListener('input', (e) => toleranceVal.textContent = `${e.target.value} %`);
+    erosionRange.addEventListener('input', (e) => {
+      erosionVal.textContent = `${e.target.value} px`;
+      renderFramePreview(parseInt(startFrameRange.value));
+    });
+
+    chromaToggle.addEventListener('change', (e) => {
+      chromaOptions.classList.toggle('hidden', !e.target.checked);
+      renderFramePreview(parseInt(startFrameRange.value));
+    });
+
+    chromaColor.addEventListener('input', () => {
+      renderFramePreview(parseInt(startFrameRange.value));
+    });
+
+    eyedropperBtn.addEventListener('click', () => {
+      isEyedropperActive = !isEyedropperActive;
+      eyedropperIndicator.classList.toggle('hidden', !isEyedropperActive);
+      eyedropperBtn.classList.toggle('bg-emerald-600', isEyedropperActive);
+    });
+
+    // スポイトタップ色取得
+    previewCanvas.addEventListener('click', (e) => {
+      if (!isEyedropperActive) return;
+      const rect = previewCanvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) * (previewCanvas.width / rect.width));
+      const y = Math.floor((e.clientY - rect.top) * (previewCanvas.height / rect.height));
+      const pixel = ctx.getImageData(x, y, 1, 1).data;
+      
+      const hex = "#" + [pixel[0], pixel[1], pixel[2]].map(x => x.toString(16).padStart(2, '0')).join('');
+      chromaColor.value = hex;
+
+      chromaToggle.checked = true;
+      chromaOptions.classList.remove('hidden');
+
+      isEyedropperActive = false;
+      eyedropperIndicator.classList.add('hidden');
+      eyedropperBtn.classList.remove('bg-emerald-600');
+      
+      renderFramePreview(parseInt(startFrameRange.value));
+    });
+
+    startFrameRange.addEventListener('input', (e) => {
+      resetPreviewMode();
+      const idx = parseInt(e.target.value);
+      startFrameVal.textContent = `${idx + 1} コマ目`;
+      renderFramePreview(idx);
+    });
+
+    endFrameRange.addEventListener('input', (e) => {
+      resetPreviewMode();
+      const idx = parseInt(e.target.value);
+      endFrameVal.textContent = `${idx + 1} コマ目`;
+      renderFramePreview(idx);
+    });
+
+    processBtn.addEventListener('click', processAndGenerateAPNG);
+    downloadBtn.addEventListener('click', downloadAPNG);
+
+    function resetPreviewMode() {
+      playStateBadge.classList.add('hidden');
+      resultImage.classList.add('hidden');
+      previewCanvas.classList.remove('hidden');
+    }
+
+    // 先頭ブランクコマ自動判定
+    function isBlankFrame(imgData) {
+      const data = imgData.data;
+      if (!data || data.length === 0) return true;
+
+      let allTransparent = true;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] !== 0) {
+          allTransparent = false;
+          break;
+        }
+      }
+      if (allTransparent) return true;
+
+      const firstR = data[0];
+      const firstG = data[1];
+      const firstB = data[2];
+      const firstA = data[3];
+
+      let maxDiff = 0;
+      for (let i = 0; i < data.length; i += 16) {
+        const rDiff = Math.abs(data[i] - firstR);
+        const gDiff = Math.abs(data[i+1] - firstG);
+        const bDiff = Math.abs(data[i+2] - firstB);
+        const aDiff = Math.abs(data[i+3] - firstA);
+        const diff = rDiff + gDiff + bDiff + aDiff;
+        if (diff > maxDiff) maxDiff = diff;
+        if (maxDiff > 12) return false;
+      }
+      return true;
+    }
+
+    async function handleFileSelect(e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
+
+      resetPreviewMode();
+      rawFrames = [];
+
+      try {
+        const fileType = file.type || '';
+        const fileName = file.name ? file.name.toLowerCase() : '';
+
+        if (fileType.includes('video') || fileName.endsWith('.mp4')) {
+          await extractVideoFrames(file);
+        } else if (fileName.endsWith('.gif') || fileType.includes('gif')) {
+          await decodeGifFile(file);
+        } else {
+          // APNG / PNG
+          const arrayBuffer = await file.arrayBuffer();
+          const img = UPNG.decode(arrayBuffer);
+          const rgbaBufs = UPNG.toRGBA8(img);
+          previewCanvas.width = img.width;
+          previewCanvas.height = img.height;
+
+          for (let i = 0; i < rgbaBufs.length; i++) {
+            const imgData = new ImageData(new Uint8ClampedArray(rgbaBufs[i]), img.width, img.height);
+            const delay = (img.tabs && img.tabs.acTL) ? img.frames[i].delay : 100;
+            rawFrames.push({ imageData: imgData, delay: delay || 100 });
+          }
+        }
+      } catch (err) {
+        console.error('File load error:', err);
+        alert('ファイルの読み込みに失敗しました。ファイル形式をご確認ください。');
+        return;
+      }
+
+      if (rawFrames.length === 0) {
+        alert('コマ情報を取得できませんでした。');
+        return;
+      }
+
+      // 先頭ブランクコマ自動除外
+      while (rawFrames.length > 1 && isBlankFrame(rawFrames[0].imageData)) {
+        rawFrames.shift();
+      }
+
+      startFrameRange.min = 0;
+      startFrameRange.max = rawFrames.length - 1;
+      startFrameRange.value = 0;
+      startFrameVal.textContent = `1 コマ目`;
+
+      endFrameRange.min = 0;
+      endFrameRange.max = rawFrames.length - 1;
+      endFrameRange.value = rawFrames.length - 1;
+      endFrameVal.textContent = `${rawFrames.length} コマ目`;
+
+      previewSection.classList.remove('hidden');
+      controlsSection.classList.remove('hidden');
+      processBtn.disabled = false;
+
+      renderFramePreview(0);
+    }
+
+    // GIFデコード
+    async function decodeGifFile(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      
+      if (window.OmgGif || window.gif || window.GifReader) {
+        try {
+          const GifReader = (window.OmgGif && window.OmgGif.GifReader) || (window.gif && window.gif.GifReader) || window.GifReader;
+          if (GifReader) {
+            const buf = new Uint8Array(arrayBuffer);
+            const reader = new GifReader(buf);
+            const w = reader.width;
+            const h = reader.height;
+            const numFrames = reader.numFrames();
+
+            previewCanvas.width = w;
+            previewCanvas.height = h;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            for (let i = 0; i < numFrames; i++) {
+              const frameInfo = reader.frameInfo(i);
+              const frameImgData = tempCtx.createImageData(w, h);
+              reader.decodeAndBlitFrameRGBA(i, frameImgData.data);
+
+              const patchCanvas = document.createElement('canvas');
+              patchCanvas.width = w;
+              patchCanvas.height = h;
+              patchCanvas.getContext('2d').putImageData(frameImgData, 0, 0);
+
+              tempCtx.drawImage(patchCanvas, 0, 0);
+              const fullImgData = tempCtx.getImageData(0, 0, w, h);
+
+              rawFrames.push({
+                imageData: fullImgData,
+                delay: (frameInfo.delay || 10) * 10
+              });
+
+              if (frameInfo.disposal === 2) {
+                tempCtx.clearRect(frameInfo.x, frameInfo.y, frameInfo.width, frameInfo.height);
+              }
+            }
+            if (rawFrames.length > 0) return;
+          }
+        } catch (e) {
+          console.warn('omggif decode fallback:', e);
+        }
+      }
+
+      let parseGIF = window.parseGIF || (window.gifuct && window.gifuct.parseGIF) || (window.Gifuct && window.Gifuct.parseGIF);
+      let decompressFrames = window.decompressFrames || (window.gifuct && window.gifuct.decompressFrames) || (window.Gifuct && window.Gifuct.decompressFrames);
+
+      if (!parseGIF || !decompressFrames) {
+        throw new Error('GIFデコーダーの読み込みに失敗しました');
+      }
+
+      const gif = parseGIF(arrayBuffer);
+      const frames = decompressFrames(gif, true);
+      const w = gif.lsd.width;
+      const h = gif.lsd.height;
+      previewCanvas.width = w;
+      previewCanvas.height = h;
+
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w;
+      tempCanvas.height = h;
+      const tempCtx = tempCanvas.getContext('2d');
+
+      frames.forEach(frame => {
+        if (frame.disposalType === 2) {
+          tempCtx.clearRect(frame.dims.left, frame.dims.top, frame.dims.width, frame.dims.height);
+        }
+
+        const patchData = new ImageData(new Uint8ClampedArray(frame.patch), frame.dims.width, frame.dims.height);
+        const patchCanvas = document.createElement('canvas');
+        patchCanvas.width = frame.dims.width;
+        patchCanvas.height = frame.dims.height;
+        patchCanvas.getContext('2d').putImageData(patchData, 0, 0);
+
+        tempCtx.drawImage(patchCanvas, frame.dims.left, frame.dims.top);
+        const fullImgData = tempCtx.getImageData(0, 0, w, h);
+
+        rawFrames.push({
+          imageData: fullImgData,
+          delay: frame.delay || 100
+        });
+      });
+    }
+
+    // MP4コマ抽出 (タイムスタンプ/FPS保持)
+    function extractVideoFrames(file) {
+      return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.playsInline = true;
+        video.muted = true;
+        video.preload = 'auto';
+
+        const url = URL.createObjectURL(file);
+        video.src = url;
+
+        const cleanup = () => {
+          URL.revokeObjectURL(url);
+        };
+
+        video.onloadedmetadata = async () => {
+          try {
+            const w = video.videoWidth || 320;
+            const h = video.videoHeight || 320;
+            previewCanvas.width = w;
+            previewCanvas.height = h;
+
+            const fps = 10;
+            const duration = video.duration || 1;
+            const totalFrames = Math.min(Math.floor(duration * fps), 100);
+
+            for (let i = 0; i < totalFrames; i++) {
+              const targetTime = i / fps;
+              await new Promise((res) => {
+                const onSeeked = () => {
+                  video.removeEventListener('seeked', onSeeked);
+                  res();
+                };
+                video.addEventListener('seeked', onSeeked);
+                video.currentTime = targetTime === 0 ? 0.001 : targetTime;
+              });
+
+              ctx.drawImage(video, 0, 0, w, h);
+              const imgData = ctx.getImageData(0, 0, w, h);
+              rawFrames.push({ imageData: imgData, delay: 1000 / fps });
+            }
+            cleanup();
+            resolve();
+          } catch (err) {
+            cleanup();
+            reject(err);
+          }
+        };
+        video.onerror = (err) => {
+          cleanup();
+          reject(err);
+        };
+
+        video.load();
+      });
+    }
+
+    // プレビュー描画
+    function renderFramePreview(idx) {
+      if (!rawFrames[idx]) return;
+      const frame = rawFrames[idx];
+      const imgData = new ImageData(new Uint8ClampedArray(frame.imageData.data), frame.imageData.width, frame.imageData.height);
+
+      if (chromaToggle.checked) {
+        const hex = chromaColor.value;
+        const targetRGB = [
+          parseInt(hex.slice(1,3), 16),
+          parseInt(hex.slice(3,5), 16),
+          parseInt(hex.slice(5,7), 16)
+        ];
+        const erosionPx = parseInt(erosionRange.value);
+        applyChromaKeyAndErosion(imgData, targetRGB, erosionPx);
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // 元FPS連動型スマート差分圧縮 ＆ APNG生成
+    async function processAndGenerateAPNG() {
+      resetPreviewMode();
+      if (rawFrames.length === 0) return;
+
+      const coverIdx = parseInt(startFrameRange.value);
+      const endIdx = parseInt(endFrameRange.value);
+      const userTolerancePct = parseFloat(toleranceRange.value) / 100;
+      const doChroma = chromaToggle.checked;
+      const erosionPx = parseInt(erosionRange.value);
+
+      let targetRGB = null;
+      if (doChroma) {
+        const hex = chromaColor.value;
+        targetRGB = [
+          parseInt(hex.slice(1,3), 16),
+          parseInt(hex.slice(3,5), 16),
+          parseInt(hex.slice(5,7), 16)
+        ];
+      }
+
+      // 1. 全コマへのクロマキー＆エッジ侵食の適用
+      const processedRawFrames = rawFrames.map(f => {
+        const imgData = new ImageData(new Uint8ClampedArray(f.imageData.data), f.imageData.width, f.imageData.height);
+        if (doChroma && targetRGB) {
+          applyChromaKeyAndErosion(imgData, targetRGB, erosionPx);
+        }
+        return { imageData: imgData, delay: f.delay };
+      });
+
+      const sequenceFrames = [];
+
+      // 【1コマ目】指定アイキャッチコマ (0.01s / 10ms固定)
+      if (processedRawFrames[coverIdx]) {
+        sequenceFrames.push({
+          imageData: new ImageData(
+            new Uint8ClampedArray(processedRawFrames[coverIdx].imageData.data),
+            processedRawFrames[coverIdx].imageData.width,
+            processedRawFrames[coverIdx].imageData.height
+          ),
+          delay: 10
+        });
+      }
+
+      // 【2コマ目以降】元動画の0コマ目〜指定終端コマ(endIdx)まで
+      for (let i = 0; i <= endIdx; i++) {
+        const f = processedRawFrames[i];
+        sequenceFrames.push({
+          imageData: new ImageData(
+            new Uint8ClampedArray(f.imageData.data),
+            f.imageData.width,
+            f.imageData.height
+          ),
+          delay: f.delay
+        });
+      }
+
+      // 2. 元FPS連動スマート差分圧縮処理
+      processedFrames = [];
+      if (sequenceFrames.length > 0) {
+        processedFrames.push(sequenceFrames[0]); // 1コマ目アイキャッチは圧縮対象外として固定
+
+        if (sequenceFrames.length > 1) {
+          let currentFrame = {
+            imageData: new ImageData(
+              new Uint8ClampedArray(sequenceFrames[1].imageData.data),
+              sequenceFrames[1].imageData.width,
+              sequenceFrames[1].imageData.height
+            ),
+            delay: sequenceFrames[1].delay
+          };
+
+          for (let i = 2; i < sequenceFrames.length; i++) {
+            const nextFrame = sequenceFrames[i];
+            const diffRatio = calculateFrameDifference(currentFrame.imageData, nextFrame.imageData);
+
+            // 元FPS（コマ遅延時間delay）に連動させた動的許容差感度の適用
+            // コマ間隔が短い（高FPS）ほど感度を微調整して動きをなめらかに保つ
+            const fpsScaleFactor = Math.max(0.5, Math.min(2.0, 100 / (nextFrame.delay || 100)));
+            const scaledTolerance = userTolerancePct * fpsScaleFactor;
+
+            if (diffRatio <= scaledTolerance) {
+              currentFrame.delay += nextFrame.delay; // 許容差内ならコマ統合＆遅延時間加算
+            } else {
+              processedFrames.push(currentFrame);
+              currentFrame = {
+                imageData: new ImageData(
+                  new Uint8ClampedArray(nextFrame.imageData.data),
+                  nextFrame.imageData.width,
+                  nextFrame.imageData.height
+                ),
+                delay: nextFrame.delay
+              };
+            }
+          }
+          if (currentFrame) processedFrames.push(currentFrame);
+        }
+      }
+
+      // 3. APNG エンコード
+      const imgs = processedFrames.map(f => f.imageData.data.buffer);
+      const delays = processedFrames.map(f => f.delay);
+      const w = previewCanvas.width;
+      const h = previewCanvas.height;
+
+      const apngBuffer = UPNG.encode(imgs, w, h, 0, delays);
+      generatedBlob = new Blob([apngBuffer], { type: 'image/png' });
+
+      // メトリクス更新 ＆ 20コマ超過警告判定
+      const frameCount = processedFrames.length;
+      const totalSec = (delays.reduce((a, b) => a + b, 0) / 1000).toFixed(2);
+      const sizeKB = (generatedBlob.size / 1024).toFixed(0);
+
+      statFrames.textContent = `${frameCount} / 20`;
+      statDuration.textContent = `${totalSec} 秒`;
+      statSize.textContent = `${sizeKB} KB`;
+
+      // 20コマ超過時は警告バナーを表示するが、ダウンロードボタンは常に許可（有効）状態を保持
+      warningBanner.classList.toggle('hidden', frameCount <= 20);
+      downloadBtn.disabled = false;
+
+      // 生成APNGのアニメーション再生プレビュー表示
+      if (generatedBlob) {
+        const url = URL.createObjectURL(generatedBlob);
+        resultImage.src = url;
+        previewCanvas.classList.add('hidden');
+        resultImage.classList.remove('hidden');
+        playStateBadge.classList.remove('hidden');
+      }
+    }
+
+    function calculateFrameDifference(img1, img2) {
+      const d1 = img1.data;
+      const d2 = img2.data;
+      let diffSum = 0;
+      const totalPixels = d1.length / 4;
+
+      for (let i = 0; i < d1.length; i += 4) {
+        const rDiff = Math.abs(d1[i] - d2[i]);
+        const gDiff = Math.abs(d1[i+1] - d2[i+1]);
+        const bDiff = Math.abs(d1[i+2] - d2[i+2]);
+        const aDiff = Math.abs(d1[i+3] - d2[i+3]);
+        diffSum += (rDiff + gDiff + bDiff + aDiff) / (255 * 4);
+      }
+      return diffSum / totalPixels;
+    }
+
+    // クロマキー ＆ エッジ侵食アルゴリズム
+    function applyChromaKeyAndErosion(imgData, targetRGB, erosionPx) {
+      const data = imgData.data;
+      const w = imgData.width;
+      const h = imgData.height;
+
+      // 1. クロマキー透過
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i+3] === 0) continue;
+        const dist = Math.sqrt(
+          Math.pow(data[i] - targetRGB[0], 2) +
+          Math.pow(data[i+1] - targetRGB[1], 2) +
+          Math.pow(data[i+2] - targetRGB[2], 2)
+        );
+        if (dist < 65) {
+          data[i+3] = 0; // 透過設定
+        }
+      }
+
+      // 2. エッジ侵食 (フチ削り)
+      if (erosionPx > 0) {
+        const copy = new Uint8ClampedArray(data);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            if (copy[idx+3] > 0) {
+              let hasTransparentNeighbor = false;
+              for (let dy = -erosionPx; dy <= erosionPx; dy++) {
+                for (let dx = -erosionPx; dx <= erosionPx; dx++) {
+                  const nx = x + dx;
+                  const ny = y + dy;
+                  if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                    const nIdx = (ny * w + nx) * 4;
+                    if (copy[nIdx+3] === 0) {
+                      hasTransparentNeighbor = true;
+                      break;
+                    }
+                  }
+                }
+                if (hasTransparentNeighbor) break;
+              }
+              if (hasTransparentNeighbor) {
+                data[idx+3] = 0;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    function downloadAPNG() {
+      if (!generatedBlob) return;
+      const url = URL.createObjectURL(generatedBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stamp_${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
