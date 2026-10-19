@@ -310,7 +310,7 @@
       const y = Math.floor((e.clientY - rect.top) * (previewCanvas.height / rect.height));
       const pixel = ctx.getImageData(x, y, 1, 1).data;
       
-      const hex = "#" + [pixel[0], pixel[1], pixel[2]].map(x => x.toString(16).padStart(2, '0')).join('');
+      const hex = "#" + [pixel, pixel, pixel].map(x => x.toString(16).padStart(2, '0')).join('');
       chromaColor.value = hex;
 
       chromaToggle.checked = true;
@@ -657,7 +657,7 @@
       ctx.putImageData(imgData, 0, 0);
     }
 
-    // 元FPS連動型スマート差分圧縮 ＆ APNG生成
+    // 自然なアニメーション間引きを実現するスマート差分圧縮 ＆ APNG生成
     async function processAndGenerateAPNG() {
       resetPreviewMode();
       if (rawFrames.length === 0) return;
@@ -729,19 +729,23 @@
           }
         }
 
-        // 2. 元FPS連動スマート差分圧縮処理 (末端コマ保持強化)
+        // 2. なめらかな動きを維持するスマート差分圧縮アルゴリズム
         processedFrames = [];
         if (sequenceFrames.length > 0) {
-          processedFrames.push(sequenceFrames[0]); // アイキャッチ（1コマ目）
+          processedFrames.push(sequenceFrames[0]); // 1コマ目アイキャッチ（固定）
 
           if (sequenceFrames.length > 1) {
+            const MAX_SINGLE_DELAY = 220; // 1コマの最大遅延時間 (220msを超えて長期間静止させない)
+            const MAX_MERGED_COUNT = 4;   // 連続でスキップ（統合）できるコマ数の上限
+
             let currentFrame = {
               imageData: new ImageData(
                 new Uint8ClampedArray(sequenceFrames[1].imageData.data),
                 sequenceFrames[1].imageData.width,
                 sequenceFrames[1].imageData.height
               ),
-              delay: sequenceFrames[1].delay
+              delay: sequenceFrames[1].delay,
+              mergedCount: 1
             };
 
             for (let i = 2; i < sequenceFrames.length; i++) {
@@ -750,18 +754,18 @@
 
               const fpsScaleFactor = Math.max(0.5, Math.min(3.0, 100 / (nextFrame.delay || 100)));
               const scaledTolerance = userTolerancePct * fpsScaleFactor;
-              
-              const isLastFrame = (i === sequenceFrames.length - 1);
 
-              // 許容差内であっても、本編の最終コマ（終端コマ）は削らずに視覚的キーフレームとして保護・更新する
-              if (diffRatio <= scaledTolerance && !isLastFrame) {
+              // アニメーションの動きを滑らかに維持するための3条件:
+              // 1. 差分が許容差以内
+              // 2. 統合後の遅延時間が MAX_SINGLE_DELAY (220ms) を超えない
+              // 3. 連続統合コマ数が MAX_MERGED_COUNT (4コマ) を超えない
+              if (diffRatio <= scaledTolerance && 
+                  (currentFrame.delay + nextFrame.delay) <= MAX_SINGLE_DELAY && 
+                  currentFrame.mergedCount < MAX_MERGED_COUNT) {
+                
                 currentFrame.delay += nextFrame.delay;
-                // 統合中の画像データを最新コマ画像に更新
-                currentFrame.imageData = new ImageData(
-                  new Uint8ClampedArray(nextFrame.imageData.data),
-                  nextFrame.imageData.width,
-                  nextFrame.imageData.height
-                );
+                currentFrame.mergedCount += 1;
+                // 注意: 基準コマの画像(currentFrame.imageData)を正しく保持し、統合中の勝手な画像置換を行わない
               } else {
                 processedFrames.push(currentFrame);
                 currentFrame = {
@@ -770,7 +774,8 @@
                     nextFrame.imageData.width,
                     nextFrame.imageData.height
                   ),
-                  delay: nextFrame.delay
+                  delay: nextFrame.delay,
+                  mergedCount: 1
                 };
               }
             }
