@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>透過GIF 豪華光沢エンボス文字ジェネレーター</title>
+  <!-- Google Fonts Import -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Noto+Sans+JP:wght@800;900&family=Poppins:wght@800;900&family=Roboto:wght@800;900&family=M+PLUS+Rounded+1c:wght@800;900&family=Zen+Maru+Gothic:wght@900&family=Dela+Gothic+One&family=Shippori+Mincho:wght@800&family=Anton&family=Cinzel:wght@900&family=Pacifico&display=swap">
+  <style>
+    :root {
+      --bg-color: #0d0d12;
+      --card-bg: #16161f;
+      --accent-color: #d4af37;
+      --text-color: #ffffff;
+      --border-color: #272736;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      max-width: 480px;
+      margin: 0 auto;
+      padding-bottom: 30px;
+    }
+
+    /* ヘッダー */
+    header {
+      padding: 0.8rem 1rem;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+      text-align: center;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #ffe066;
+    }
+
+    /* 上部固定 プレビューエリア */
+    .sticky-preview {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #111118;
+      border-bottom: 2px solid var(--border-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .preview-box {
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      padding: 10px;
+    }
+
+    /* 背景テーマ */
+    .preview-box.checkerboard {
+      background-color: #121218;
+      background-image: linear-gradient(45deg, #1c1c28 25%, transparent 25%),
+                        linear-gradient(-45deg, #1c1c28 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #1c1c28 75%),
+                        linear-gradient(-45deg, transparent 75%, #1c1c28 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    }
+    .preview-box.dark { background: #000000; }
+    .preview-box.light { background: #ffffff; }
+
+    /* 2層文字コンテナ (中央揃え固定 & 変形対応) */
+    .text-container {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      transform-origin: center center;
+      transition: transform 0.05s ease-out;
+    }
+
+    /* 背面レイヤー: エンボス凹凸 & 3D立体 */
+    .text-shadow-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      font-weight: 900;
+      color: transparent;
+      user-select: none;
+      pointer-events: none;
+      white-space: pre-wrap;
+      text-align: center;
+      line-height: 1.25;
+    }
+
+    /* 前面レイヤー: グラデーション & 光沢スライドアニメーション */
+    .glossy-target {
+      position: relative;
+      z-index: 2;
+      font-size: 42px;
+      font-weight: 900;
+      text-align: center;
+      display: inline-block;
+      user-select: none;
+      white-space: pre-wrap;
+      line-height: 1.25;
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      background-size: 200% 200%, 100% 100%;
+      background-repeat: no-repeat, no-repeat;
+      animation: shine 2.5s linear infinite;
+    }
+
+    @keyframes shine {
+      0% { background-position: 200% 0, 0 0; }
+      100% { background-position: -100% 0, 0 0; }
+    }
+
+    /* テーマ切替ミニバー */
+    .theme-toggle-bar {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #181822;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .theme-btn {
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: #222230;
+      color: #aaa;
+      cursor: pointer;
+    }
+    .theme-btn.active {
+      background: #4f46e5;
+      color: #fff;
+      border-color: #4f46e5;
+    }
+
+    /* コントロールパネル */
+    .controls-container {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #facc15;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .input-row label {
+      font-size: 0.78rem;
+      color: #aaa;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    textarea, select, input[type="text"] {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #0d0d14;
+      color: #fff;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 54px;
+    }
+
+    /* プリセット選択ボタン群 */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .preset-btn {
+      padding: 8px 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #222230;
+      color: #ddd;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      border-color: #facc15;
+    }
+
+    .preset-btn.active {
+      border-color: #facc15;
+      background: #2d260f;
+      color: #ffe066;
+      box-shadow: 0 0 8px rgba(250, 204, 21, 0.3);
+    }
+
+    .preset-preview-bar {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+    }
+
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .color-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 0.68rem;
+      color: #888;
+    }
+
+    .color-cell input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      width: 100%;
+      height: 36px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      accent-color: var(--accent-color);
+      border-radius: 3px;
+    }
+
+    /* GIF出力ボタン */
+    .export-card {
+      background: linear-gradient(135deg, #2a2100 0%, #171200 100%);
+      border: 1px solid #d4af37;
+    }
+
+    .export-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent-color);
+      color: #111;
+      font-weight: 900;
+      font-size: 0.95rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(212, 175, 55, 0.4);
+    }
+
+    .export-btn:disabled {
+      background: #444;
+      color: #888;
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* プログレス表示 */
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #222;
+      border-radius: 3px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #facc15;
+      transition: width 0.1s;
+    }
+
+    .hidden-input {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>👑 透過GIF 豪華光沢エンボス文字ジェネレーター</h1>
+  </header>
+
+  <!-- 上部固定 プレビューエリア -->
+  <div class="sticky-preview">
+    <div class="preview-box checkerboard" id="preview-box">
+      <div class="text-container" id="text-container">
+        <!-- 背面: エンボス凹凸 & 3D立体 -->
+        <div class="text-shadow-layer" id="shadow-text">光沢&#10;文字</div>
+        <!-- 前面: 金属本体 & 光沢アニメーション -->
+        <div class="glossy-target" id="target-text">光沢&#10;文字</div>
+      </div>
+    </div>
+    <div class="theme-toggle-bar">
+      <button class="theme-btn active" data-theme="checkerboard">透過風</button>
+      <button class="theme-btn" data-theme="dark">黒背景</button>
+      <button class="theme-btn" data-theme="light">白背景</button>
+    </div>
+  </div>
+
+  <!-- コントロール群 (スマホ向け1カラム) -->
+  <div class="controls-container">
+
+    <!-- 光沢カラープリセット -->
+    <div class="section-card">
+      <div class="section-title">🎨 光沢カラーセット (プリセット)</div>
+      <div class="preset-grid">
+        <button class="preset-btn active" data-preset="gold">
+          <span>ゴールド</span>
+          <div class="preset-preview-bar" style="background: linear-gradient(90deg, #ffe066, #d4af37);"></div>
+        </button>
+        <button class="preset-btn" data-preset="silver">
+          <span>シルバー</span>
+          <div class="preset-preview-bar" style="background: linear-gradient(90deg, #ffffff, #a1a1a1);"></div>
+        </button>
+        <button class="preset-btn" data-preset="rosegold">
+          <span>ピンクゴールド</span>
+          <div class="preset-preview-bar" style="background: linear-gradient(90deg, #f7d6d0, #b76e79);"></div>
+        </button>
+        <button class="preset-btn" data-preset="platinum">
+          <span>プラチナ</span>
+          <div class="preset-preview-bar" style="background: linear-gradient(90deg, #e0f7fa, #00838f);"></div>
+        </button>
+        <button class="preset-btn" data-preset="ruby">
+          <span>ルビーレッド</span>
+          <div class="preset-preview-bar" style="background: linear-gradient(90deg, #ff8a80, #c62828);"></div>
+        </button>
+        <button class="preset-btn" data-preset="emerald">
+          <span>エメラルド</span>
+          <div class="preset-preview-bar" style="background: linear-gradient(90deg, #a7ffeb, #2e7d32);"></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- テキスト & フォント変形・間隔 -->
+    <div class="section-card">
+      <div class="section-title">📝 テキスト & フォント選択・間隔</div>
+      <div class="input-row">
+        <label for="text-input">文字列（改行可・中央揃え）</label>
+        <textarea id="text-input" rows="2">光沢&#10;文字</textarea>
+      </div>
+      <div class="input-row">
+        <label for="font-select">フォント選択</label>
+        <select id="font-select">
+          <optgroup label="日本語Webフォント (Google Fonts)">
+            <option value="'M PLUS Rounded 1c', sans-serif" selected>M PLUS Rounded (丸ゴシック)</option>
+            <option value="'Noto Sans JP', sans-serif">Noto Sans JP (標準ゴシック)</option>
+            <option value="'Zen Maru Gothic', sans-serif">Zen Maru Gothic (ゼンジ丸ゴ)</option>
+            <option value="'Dela Gothic One', cursive">Dela Gothic One (超極太インパクト)</option>
+            <option value="'Shippori Mincho', serif">しっぽり明朝 (高級感明朝)</option>
+          </optgroup>
+          <optgroup label="日本語システムフォント (OS標準)">
+            <option value="'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W6', sans-serif">ヒラギノ角ゴ (Mac / iOS)</option>
+            <option value="'Hiragino Mincho ProN', 'ヒラギノ明朝 ProN', serif">ヒラギノ明朝 (Mac / iOS)</option>
+            <option value="'Yu Gothic', '游ゴシック', sans-serif">游ゴシック (Windows / Mac)</option>
+            <option value="'Yu Mincho', '游明朝', serif">游明朝 (Windows / Mac)</option>
+            <option value="'Meiryo', 'メイリオ', sans-serif">メイリオ (Windows)</option>
+            <option value="'MS PGothic', 'ＭＳ Ｐゴシック', sans-serif">ＭＳ Ｐゴシック (Windows)</option>
+            <option value="'MS PMincho', 'ＭＳ Ｐ明朝', serif">ＭＳ Ｐ明朝 (Windows)</option>
+          </optgroup>
+          <optgroup label="欧文Webフォント (Google Fonts)">
+            <option value="'Montserrat', sans-serif">Montserrat (モダンサンセリフ)</option>
+            <option value="'Poppins', sans-serif">Poppins (丸みポップ)</option>
+            <option value="'Roboto', sans-serif">Roboto (スタンダード)</option>
+            <option value="'Anton', sans-serif">Anton (縦長太字)</option>
+            <option value="'Cinzel', serif">Cinzel (古代ローマ風エレガント)</option>
+            <option value="'Pacifico', cursive">Pacifico (筆記体・スクリプト)</option>
+          </optgroup>
+          <optgroup label="欧文システムフォント (OS標準)">
+            <option value="'Impact', sans-serif">Impact (極太インパクト)</option>
+            <option value="'Arial Black', sans-serif">Arial Black (太字サンセリフ)</option>
+            <option value="'Georgia', serif">Georgia (エレガントセリフ)</option>
+            <option value="'Comic Sans MS', cursive">Comic Sans MS (手書き風)</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS (軽快サンセリフ)</option>
+            <option value="'Times New Roman', serif">Times New Roman (標準セリフ)</option>
+          </optgroup>
+          <optgroup label="カスタムフォント指定">
+            <option value="custom">直接入力 (端末のフォント名を入力)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- カスタムフォント名入力欄 (カスタム選択時に表示) -->
+      <div class="input-row hidden-input" id="custom-font-row">
+        <label for="custom-font-input">端末のフォント名を入力 (例: HG創英角ﾎﾟｯﾌﾟ体)</label>
+        <input type="text" id="custom-font-input" placeholder="フォント名を入力...">
+      </div>
+
+      <div class="input-row">
+        <label for="font-size">サイズ: <span id="size-val">42px</span></label>
+        <input type="range" id="font-size" min="20" max="72" value="42">
+      </div>
+      <div class="input-row">
+        <label for="letter-spacing">文字間の間隔: <span id="letter-spacing-val">0px</span></label>
+        <input type="range" id="letter-spacing" min="-5" max="30" value="0">
+      </div>
+      <div class="input-row">
+        <label for="line-spacing">行の間隔 (行高): <span id="line-spacing-val">1.25倍</span></label>
+        <input type="range" id="line-spacing" min="0.8" max="2.2" step="0.05" value="1.25">
+      </div>
+      <div class="input-row">
+        <label for="font-scale-x">横倍率 (幅): <span id="scale-x-val">1.00倍</span></label>
+        <input type="range" id="font-scale-x" min="0.5" max="2.0" step="0.05" value="1.0">
+      </div>
+      <div class="input-row">
+        <label for="font-scale-y">縦倍率 (高さ): <span id="scale-y-val">1.00倍</span></label>
+        <input type="range" id="font-scale-y" min="0.5" max="2.0" step="0.05" value="1.0">
+      </div>
+      <div class="input-row">
+        <label for="export-scale">解像度 (画質倍率): <span id="scale-val">2倍 (高画質)</span></label>
+        <select id="export-scale">
+          <option value="1">1倍 (標準サイズ)</option>
+          <option value="2" selected>2倍 (高画質・おすすめ)</option>
+          <option value="3">3倍 (超高画質)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- エンボス加工 & 3D立体 -->
+    <div class="section-card">
+      <div class="section-title">🧱 エンボス加工 (立体凹凸) & 3D立体</div>
+      <div class="input-row">
+        <label for="emboss-size">エンボス厚み: <span id="emboss-val">2px</span></label>
+        <input type="range" id="emboss-size" min="1" max="8" value="2">
+      </div>
+      <div class="input-row">
+        <label for="emboss-angle">エンボス角度: <span id="emboss-angle-val">315deg</span></label>
+        <input type="range" id="emboss-angle" min="0" max="360" value="315">
+      </div>
+      <div class="input-row">
+        <label for="3d-depth">3D奥行き: <span id="depth-val">4px</span></label>
+        <input type="range" id="3d-depth" min="0" max="12" value="4">
+      </div>
+      <div class="input-row">
+        <label for="3d-angle">3D奥行き角度: <span id="depth-angle-val">135deg</span></label>
+        <input type="range" id="3d-angle" min="0" max="360" value="135">
+      </div>
+      <div class="color-grid">
+        <div class="color-cell">
+          <span>光面(ハイライト)</span>
+          <input type="color" id="emboss-light" value="#ffffff">
+        </div>
+        <div class="color-cell">
+          <span>影面(シャドウ)</span>
+          <input type="color" id="emboss-shadow" value="#2e1f00">
+        </div>
+        <div class="color-cell">
+          <span>3D立体色</span>
+          <input type="color" id="depth-color" value="#705200">
+        </div>
+        <div class="color-cell">
+          <span>ベース色1</span>
+          <input type="color" id="color1" value="#ffe066">
+        </div>
+      </div>
+      <div class="color-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="color-cell">
+          <span>ベース色2</span>
+          <input type="color" id="color2" value="#d4af37">
+        </div>
+        <div class="color-cell">
+          <span>光沢ハイライト</span>
+          <input type="color" id="shine-color" value="#ffffff">
+        </div>
+      </div>
+    </div>
+
+    <!-- 光沢パラメータ -->
+    <div class="section-card">
+      <div class="section-title">❇️ 光沢アニメーション</div>
+      <div class="input-row">
+        <label for="shine-angle">光沢の角度: <span id="angle-val">120deg</span></label>
+        <input type="range" id="shine-angle" min="0" max="360" value="120">
+      </div>
+      <div class="input-row">
+        <label for="shine-width">光沢幅: <span id="width-val">15%</span></label>
+        <input type="range" id="shine-width" min="5" max="35" value="15">
+      </div>
+      <div class="input-row">
+        <label for="shine-speed">速度: <span id="speed-val">2.5s</span></label>
+        <input type="range" id="shine-speed" min="0.8" max="5" step="0.1" value="2.5">
+      </div>
+    </div>
+
+    <!-- 透過GIF専用エクスポート -->
+    <div class="section-card export-card">
+      <div class="section-title" style="color: #fde047;">🎬 エクスポート</div>
+      <button class="export-btn" id="btn-export-gif">
+        <span>✨ 豪華光沢エンボス透過GIFを出力</span>
+      </button>
+      <div class="progress-bar" id="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <p id="status-msg" style="font-size: 0.75rem; color: #ddd; text-align: center; display: none;">GIFを生成中...</p>
+    </div>
+
+  </div>
+
+  <script>
+    // DOM Elements
+    const textInput = document.getElementById('text-input');
+    const fontSelect = document.getElementById('font-select');
+    const customFontRow = document.getElementById('custom-font-row');
+    const customFontInput = document.getElementById('custom-font-input');
+    const fontSize = document.getElementById('font-size');
+    const sizeVal = document.getElementById('size-val');
+    const letterSpacing = document.getElementById('letter-spacing');
+    const letterSpacingVal = document.getElementById('letter-spacing-val');
+    const lineSpacing = document.getElementById('line-spacing');
+    const lineSpacingVal = document.getElementById('line-spacing-val');
+    const fontScaleX = document.getElementById('font-scale-x');
+    const scaleXVal = document.getElementById('scale-x-val');
+    const fontScaleY = document.getElementById('font-scale-y');
+    const scaleYVal = document.getElementById('scale-y-val');
+    const exportScale = document.getElementById('export-scale');
+    const scaleVal = document.getElementById('scale-val');
+    const embossSize = document.getElementById('emboss-size');
+    const embossVal = document.getElementById('emboss-val');
+    const embossAngle = document.getElementById('emboss-angle');
+    const embossAngleVal = document.getElementById('emboss-angle-val');
+    const embossLight = document.getElementById('emboss-light');
+    const embossShadow = document.getElementById('emboss-shadow');
+    const depth3d = document.getElementById('3d-depth');
+    const depthVal = document.getElementById('depth-val');
+    const depthAngle = document.getElementById('3d-angle');
+    const depthAngleVal = document.getElementById('depth-angle-val');
+    const depthColor = document.getElementById('depth-color');
+    const color1 = document.getElementById('color1');
+    const color2 = document.getElementById('color2');
+    const shineColor = document.getElementById('shine-color');
+    const shineAngle = document.getElementById('shine-angle');
+    const angleVal = document.getElementById('angle-val');
+    const shineWidth = document.getElementById('shine-width');
+    const widthVal = document.getElementById('width-val');
+    const shineSpeed = document.getElementById('shine-speed');
+    const speedVal = document.getElementById('speed-val');
+    const targetText = document.getElementById('target-text');
+    const shadowText = document.getElementById('shadow-text');
+    const textContainer = document.getElementById('text-container');
+    const previewBox = document.getElementById('preview-box');
+    const themeBtns = document.querySelectorAll('.theme-btn');
+    const presetBtns = document.querySelectorAll('.preset-btn');
+    const btnExportGif = document.getElementById('btn-export-gif');
+    const progressBar = document.getElementById('progress-bar');
+    const progressFill = document.getElementById('progress-fill');
+    const statusMsg = document.getElementById('status-msg');
+
+    // カラープリセット辞書
+    const colorPresets = {
+      gold: {
+        c1: '#ffe066', c2: '#d4af37', shine: '#ffffff',
+        shadow: '#2e1f00', depth: '#705200', light: '#ffffff'
+      },
+      silver: {
+        c1: '#ffffff', c2: '#a1a1a1', shine: '#ffffff',
+        shadow: '#1c1c1c', depth: '#4a4a4a', light: '#ffffff'
+      },
+      rosegold: {
+        c1: '#f7d6d0', c2: '#b76e79', shine: '#ffffff',
+        shadow: '#3a151b', depth: '#733842', light: '#ffffff'
+      },
+      platinum: {
+        c1: '#e0f7fa', c2: '#00838f', shine: '#ffffff',
+        shadow: '#00222a', depth: '#004d40', light: '#ffffff'
+      },
+      ruby: {
+        c1: '#ff8a80', c2: '#c62828', shine: '#ffffff',
+        shadow: '#3b0000', depth: '#7f0000', light: '#ffffff'
+      },
+      emerald: {
+        c1: '#a7ffeb', c2: '#2e7d32', shine: '#ffffff',
+        shadow: '#002b00', depth: '#005005', light: '#ffffff'
+      }
+    };
+
+    // プリセット適用
+    presetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        presetBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const pKey = btn.dataset.preset;
+        const p = colorPresets[pKey];
+        if (p) {
+          color1.value = p.c1;
+          color2.value = p.c2;
+          shineColor.value = p.shine;
+          embossShadow.value = p.shadow;
+          depthColor.value = p.depth;
+          embossLight.value = p.light;
+          updateStyle();
+        }
+      });
+    });
+
+    // アクティブなフォント文字列を取得
+    function getActiveFontFamily() {
+      if (fontSelect.value === 'custom') {
+        const customName = customFontInput.value.trim();
+        return customName ? `'${customName}', sans-serif` : 'sans-serif';
+      }
+      return fontSelect.value;
+    }
+
+    // プレビュー表示の更新
+    function updateStyle() {
+      if (fontSelect.value === 'custom') {
+        customFontRow.classList.remove('hidden-input');
+      } else {
+        customFontRow.classList.add('hidden-input');
+      }
+
+      const text = textInput.value || ' ';
+      const font = getActiveFontFamily();
+      const size = fontSize.value;
+      const lSpacing = parseInt(letterSpacing.value);
+      const lHeight = parseFloat(lineSpacing.value);
+      const scaleX = parseFloat(fontScaleX.value) || 1.0;
+      const scaleY = parseFloat(fontScaleY.value) || 1.0;
+      const scaleText = exportScale.options[exportScale.selectedIndex].text;
+      const eSize = parseInt(embossSize.value);
+      const eAngle = parseInt(embossAngle.value);
+      const eLight = embossLight.value;
+      const eShadow = embossShadow.value;
+      const dDepth = parseInt(depth3d.value);
+      const dAngle = parseInt(depthAngle.value);
+      const dColor = depthColor.value;
+      const c1 = color1.value;
+      const c2 = color2.value;
+      const sc = shineColor.value;
+      const deg = shineAngle.value;
+      const w = parseInt(shineWidth.value);
+      const speed = shineSpeed.value;
+
+      targetText.textContent = text;
+      shadowText.textContent = text;
+
+      sizeVal.textContent = `${size}px`;
+      letterSpacingVal.textContent = `${lSpacing}px`;
+      lineSpacingVal.textContent = `${lHeight.toFixed(2)}倍`;
+      scaleXVal.textContent = `${scaleX.toFixed(2)}倍`;
+      scaleYVal.textContent = `${scaleY.toFixed(2)}倍`;
+      if (scaleVal) scaleVal.textContent = scaleText;
+      embossVal.textContent = `${eSize}px`;
+      embossAngleVal.textContent = `${eAngle}deg`;
+      depthVal.textContent = `${dDepth}px`;
+      depthAngleVal.textContent = `${dAngle}deg`;
+      angleVal.textContent = `${deg}deg`;
+      widthVal.textContent = `${w}%`;
+      speedVal.textContent = `${speed}s`;
+
+      targetText.style.fontFamily = font;
+      targetText.style.fontSize = `${size}px`;
+      targetText.style.letterSpacing = `${lSpacing}px`;
+      targetText.style.lineHeight = lHeight;
+
+      shadowText.style.fontFamily = font;
+      shadowText.style.fontSize = `${size}px`;
+      shadowText.style.letterSpacing = `${lSpacing}px`;
+      shadowText.style.lineHeight = lHeight;
+
+      // コンテナ全体への縦横スケール変形適用
+      textContainer.style.transform = `scale(${scaleX}, ${scaleY})`;
+
+      // 1. エンボス角度の光・影ベクトル
+      const radE = (eAngle * Math.PI) / 180;
+      const lxUnit = Math.sin(radE);
+      const lyUnit = -Math.cos(radE);
+      const sxUnit = -lxUnit;
+      const syUnit = -lyUnit;
+
+      // 2. 3D奥行き角度の影ベクトル
+      const rad3D = (dAngle * Math.PI) / 180;
+      const dx3dUnit = Math.sin(rad3D);
+      const dy3dUnit = -Math.cos(rad3D);
+
+      let shadows = [];
+      // 光面ハイライト
+      for (let i = 1; i <= eSize; i++) {
+        const lx = Math.round(lxUnit * i);
+        const ly = Math.round(lyUnit * i);
+        shadows.push(`${lx}px ${ly}px 0px ${eLight}`);
+      }
+      // 影面シャドウ
+      for (let i = 1; i <= eSize; i++) {
+        const sx = Math.round(sxUnit * i);
+        const sy = Math.round(syUnit * i);
+        shadows.push(`${sx}px ${sy}px 0px ${eShadow}`);
+      }
+      // 3D立体奥行き（指定角度）
+      for (let i = 1; i <= dDepth; i++) {
+        const totalD = eSize + i;
+        const offX = Math.round(dx3dUnit * totalD);
+        const offY = Math.round(dy3dUnit * totalD);
+        shadows.push(`${offX}px ${offY}px 0px ${dColor}`);
+      }
+      if (dDepth > 0) {
+        const totalDLast = eSize + dDepth + 2;
+        const offX = Math.round(dx3dUnit * totalDLast);
+        const offY = Math.round(dy3dUnit * totalDLast);
+        shadows.push(`${offX}px ${offY}px 6px rgba(0,0,0,0.6)`);
+      }
+      shadowText.style.textShadow = shadows.join(', ');
+
+      // 前面レイヤー: 光沢スライド層 + ベースグラデーション
+      const p1 = Math.max(0, 50 - w);
+      const p2 = Math.min(100, 50 + w);
+      const shineLayer = `linear-gradient(${deg}deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) ${p1}%, ${sc} 50%, rgba(255,255,255,0) ${p2}%, rgba(255,255,255,0) 100%)`;
+      const baseLayer = `linear-gradient(${deg}deg, ${c1} 0%, ${c2} 100%)`;
+
+      targetText.style.backgroundImage = `${shineLayer}, ${baseLayer}`;
+      targetText.style.animationDuration = `${speed}s`;
+    }
+
+    [textInput, fontSelect, customFontInput, fontSize, letterSpacing, lineSpacing, fontScaleX, fontScaleY, exportScale, embossSize, embossAngle, embossLight, embossShadow, depth3d, depthAngle, depthColor, color1, color2, shineColor, shineAngle, shineWidth, shineSpeed].forEach(el => {
+      el.addEventListener('input', updateStyle);
+    });
+
+    themeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        themeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        previewBox.className = `preview-box ${btn.dataset.theme}`;
+      });
+    });
+
+    updateStyle();
+
+    // WebFontロード確認
+    document.fonts.ready.then(() => {
+      updateStyle();
+    });
+
+    // ==========================================
+    // 透過GIFエンコーダー (規格準拠 LZW & Octree量子化)
+    // ==========================================
+
+    function encodeLZW(pixels, minCodeSize = 8) {
+      const clearCode = 1 << minCodeSize;
+      const eofCode = clearCode + 1;
+      let codeSize = minCodeSize + 1;
+      let nextCode = eofCode + 1;
+
+      const dict = new Map();
+      for (let i = 0; i < clearCode; i++) dict.set(String(i), i);
+
+      const bytes = [];
+      let curByte = 0, curBits = 0;
+
+      function writeCode(code) {
+        curByte |= (code << curBits);
+        curBits += codeSize;
+        while (curBits >= 8) {
+          bytes.push(curByte & 0xFF);
+          curByte >>= 8;
+          curBits -= 8;
+        }
+      }
+
+      writeCode(clearCode);
+      let prefix = "";
+
+      for (let i = 0; i < pixels.length; i++) {
+        const k = pixels[i];
+        const key = prefix === "" ? String(k) : prefix + "," + k;
+
+        if (dict.has(key)) {
+          prefix = key;
+        } else {
+          writeCode(dict.get(prefix));
+
+          if (nextCode < 4096) {
+            dict.set(key, nextCode);
+            if (nextCode === (1 << codeSize) && codeSize < 12) {
+              codeSize++;
+            }
+            nextCode++;
+          } else {
+            writeCode(clearCode);
+            dict.clear();
+            for (let j = 0; j < clearCode; j++) dict.set(String(j), j);
+            codeSize = minCodeSize + 1;
+            nextCode = eofCode + 1;
+          }
+          prefix = String(k);
+        }
+      }
+
+      if (prefix !== "") writeCode(dict.get(prefix));
+      writeCode(eofCode);
+
+      if (curBits > 0) bytes.push(curByte & 0xFF);
+
+      const subBlocks = [minCodeSize];
+      for (let i = 0; i < bytes.length; i += 255) {
+        const chunk = bytes.slice(i, i + 255);
+        subBlocks.push(chunk.length, ...chunk);
+      }
+      subBlocks.push(0);
+      return subBlocks;
+    }
+
+    class OctreeQuantizer {
+      constructor(maxColors = 254) {
+        this.maxColors = maxColors;
+        this.levels = Array.from({ length: 8 }, () => []);
+        this.leafCount = 0;
+        this.root = this.createNode(0);
+      }
+
+      createNode(level) {
+        const node = { r: 0, g: 0, b: 0, count: 0, children: new Array(8).fill(null), isLeaf: level === 7, level: level };
+        if (level < 7) this.levels[level].push(node);
+        else this.leafCount++;
+        return node;
+      }
+
+      addColor(r, g, b) {
+        let node = this.root;
+        for (let level = 0; level < 8; level++) {
+          if (node.isLeaf) { node.r += r; node.g += g; node.b += b; node.count++; return; }
+          const idx = (((r >> (7 - level)) & 1) << 2) | (((g >> (7 - level)) & 1) << 1) | ((b >> (7 - level)) & 1);
+          if (!node.children[idx]) node.children[idx] = this.createNode(level + 1);
+          node = node.children[idx];
+        }
+        node.r += r; node.g += g; node.b += b; node.count++;
+      }
+
+      reduce() {
+        for (let level = 6; level >= 0; level--) {
+          for (let i = 0; i < this.levels[level].length; i++) {
+            const node = this.levels[level][i];
+            let childrenCount = 0;
+            for (let j = 0; j < 8; j++) {
+              if (node.children[j]) {
+                node.r += node.children[j].r; node.g += node.children[j].g; node.b += node.children[j].b;
+                node.count += node.children[j].count;
+                node.children[j] = null; childrenCount++;
+              }
+            }
+            if (childrenCount > 0) {
+              this.leafCount -= (childrenCount - 1);
+              if (this.leafCount <= this.maxColors) return;
+            }
+          }
+        }
+      }
+
+      buildPalette() {
+        while (this.leafCount > this.maxColors) this.reduce();
+        const palette = [];
+        this.collectPalette(this.root, palette);
+        return palette;
+      }
+
+      collectPalette(node, palette) {
+        if (node.isLeaf || (node.count > 0 && node.children.every(c => c === null))) {
+          if (node.count > 0) palette.push({ r: Math.round(node.r / node.count), g: Math.round(node.g / node.count), b: Math.round(node.b / node.count) });
+          return;
+        }
+        for (let i = 0; i < 8; i++) {
+          if (node.children[i]) this.collectPalette(node.children[i], palette);
+        }
+      }
+    }
+
+    function quantizeFrameData(rgba, width, height, bgStrokeHex) {
+      const quantizer = new OctreeQuantizer(254);
+      const strokeR = parseInt(bgStrokeHex.substring(1, 3), 16) || 0;
+      const strokeG = parseInt(bgStrokeHex.substring(3, 5), 16) || 0;
+      const strokeB = parseInt(bgStrokeHex.substring(5, 7), 16) || 0;
+
+      for (let i = 0; i < rgba.length; i += 4) {
+        if (rgba[i + 3] >= 32) quantizer.addColor(rgba[i], rgba[i + 1], rgba[i + 2]);
+      }
+
+      const rawPalette = quantizer.buildPalette();
+      const palette = new Uint8Array(768);
+      for (let c = 0; c < rawPalette.length; c++) {
+        palette[(c + 1) * 3] = rawPalette[c].r;
+        palette[(c + 1) * 3 + 1] = rawPalette[c].g;
+        palette[(c + 1) * 3 + 2] = rawPalette[c].b;
+      }
+
+      const pixels = new Uint8Array(width * height);
+      for (let i = 0; i < rgba.length; i += 4) {
+        const a = rgba[i + 3];
+        const pxIdx = i / 4;
+        if (a < 32) {
+          pixels[pxIdx] = 0;
+        } else {
+          const alphaNorm = a / 255;
+          const r = Math.round(rgba[i] * alphaNorm + strokeR * (1 - alphaNorm));
+          const g = Math.round(rgba[i + 1] * alphaNorm + strokeG * (1 - alphaNorm));
+          const b = Math.round(rgba[i + 2] * alphaNorm + strokeB * (1 - alphaNorm));
+
+          let minDist = Infinity, bestIdx = 1;
+          for (let c = 0; c < rawPalette.length; c++) {
+            const dr = r - rawPalette[c].r, dg = g - rawPalette[c].g, db = b - rawPalette[c].b;
+            const dist = dr * dr + dg * dg + db * db;
+            if (dist < minDist) { minDist = dist; bestIdx = c + 1; if (dist === 0) break; }
+          }
+          pixels[pxIdx] = bestIdx;
+        }
+      }
+      return { palette, pixels };
+    }
+
+    function hexToRgbaStr(hex, alpha) {
+      hex = hex.replace('#', '');
+      if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+      const r = parseInt(hex.substring(0, 2), 16) || 255;
+      const g = parseInt(hex.substring(2, 4), 16) || 255;
+      const b = parseInt(hex.substring(4, 6), 16) || 255;
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    // 透過GIFエクスポート処理
+    btnExportGif.addEventListener('click', async () => {
+      btnExportGif.disabled = true;
+      progressBar.style.display = 'block';
+      statusMsg.style.display = 'block';
+      statusMsg.textContent = 'フォント確認・高画質GIF準備中...';
+      progressFill.style.width = '0%';
+
+      // WebFont読み込み完了を確実に待機
+      await document.fonts.ready;
+
+      const rawText = textInput.value || ' ';
+      const lines = rawText.split('\n');
+      const font = getActiveFontFamily();
+      const baseFontSize = parseInt(fontSize.value);
+      const lSpacing = parseInt(letterSpacing.value);
+      const lHeightFactor = parseFloat(lineSpacing.value);
+      const scaleX = parseFloat(fontScaleX.value) || 1.0;
+      const scaleY = parseFloat(fontScaleY.value) || 1.0;
+      const scale = parseFloat(exportScale.value) || 2;
+
+      const renderSize = baseFontSize * scale;
+      const renderLetterSpacing = lSpacing * scale;
+      const lineHeight = renderSize * lHeightFactor;
+      const totalTextHeight = lines.length * lineHeight;
+
+      const eSize = parseInt(embossSize.value) * scale;
+      const eAngle = parseInt(embossAngle.value);
+      const eLight = embossLight.value;
+      const eShadow = embossShadow.value;
+      const dDepth = parseInt(depth3d.value) * scale;
+      const dAngle = parseInt(depthAngle.value);
+      const dColor = depthColor.value;
+      const c1 = color1.value;
+      const c2 = color2.value;
+      const sc = shineColor.value;
+      const deg = parseInt(shineAngle.value);
+      const wWidth = parseInt(shineWidth.value) / 100;
+
+      const offscreen = document.createElement('canvas');
+      const ctx = offscreen.getContext('2d');
+
+      ctx.font = `900 ${renderSize}px ${font}`;
+      if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = `${renderLetterSpacing}px`;
+      }
+
+      // 最大行幅を計測
+      let maxLineWidth = 0;
+      lines.forEach(line => {
+        let w = ctx.measureText(line).width;
+        if (!('letterSpacing' in ctx) && renderLetterSpacing !== 0) {
+          w += line.length * renderLetterSpacing;
+        }
+        if (w > maxLineWidth) maxLineWidth = w;
+      });
+
+      // スケール変形後の寸法計算
+      const padding = Math.ceil(36 * scale + eSize * 2 + dDepth * 2);
+      const calculatedWidth = Math.ceil(maxLineWidth * scaleX + padding * 2);
+      const calculatedHeight = Math.ceil(totalTextHeight * scaleY + padding * 2);
+
+      const minWidth = Math.ceil(320 * scale);
+      const minHeight = Math.ceil(180 * scale);
+
+      const canvasWidth = Math.max(minWidth, calculatedWidth);
+      const canvasHeight = Math.max(minHeight, calculatedHeight);
+
+      offscreen.width = canvasWidth;
+      offscreen.height = canvasHeight;
+
+      const gifBytes = [];
+      gifBytes.push(0x47, 0x49, 0x46, 0x38, 0x39, 0x61);
+      gifBytes.push(canvasWidth & 0xFF, (canvasWidth >> 8) & 0xFF);
+      gifBytes.push(canvasHeight & 0xFF, (canvasHeight >> 8) & 0xFF);
+      gifBytes.push(0x70, 0x00, 0x00);
+
+      // Loop Extension
+      gifBytes.push(0x21, 0xFF, 0x0B, 0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30, 0x03, 0x01, 0x00, 0x00, 0x00);
+
+      const totalFrames = 18;
+      const centerX = canvasWidth / 2;
+      const centerY = canvasHeight / 2;
+
+      // 1. エンボス角度のベクトル
+      const radE = (eAngle * Math.PI) / 180;
+      const lxUnit = Math.sin(radE);
+      const lyUnit = -Math.cos(radE);
+      const sxUnit = -lxUnit;
+      const syUnit = -lyUnit;
+
+      // 2. 3D奥行き角度のベクトル
+      const rad3D = (dAngle * Math.PI) / 180;
+      const dx3dUnit = Math.sin(rad3D);
+      const dy3dUnit = -Math.cos(rad3D);
+
+      // 3. グラデーション方向ベクトル
+      const rad = (deg * Math.PI) / 180;
+      const len = Math.max(canvasWidth, canvasHeight) * 1.2;
+      const dx = Math.sin(rad) * len;
+      const dy = -Math.cos(rad) * len;
+
+      const startY = centerY - (totalTextHeight / 2) + (lineHeight / 2);
+
+      for (let f = 0; f < totalFrames; f++) {
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+        // スケール変形行列の適用 (中央基準)
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(scaleX, scaleY);
+        ctx.translate(-centerX, -centerY);
+
+        ctx.font = `900 ${renderSize}px ${font}`;
+        if ('letterSpacing' in ctx) {
+          ctx.letterSpacing = `${renderLetterSpacing}px`;
+        }
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // ベースグラデーション
+        const baseGrad = ctx.createLinearGradient(
+          centerX - dx * 0.5, centerY - dy * 0.5,
+          centerX + dx * 0.5, centerY + dy * 0.5
+        );
+        baseGrad.addColorStop(0, c1);
+        baseGrad.addColorStop(1, c2);
+
+        // 光沢グラデーション
+        const progress = f / totalFrames;
+        const pos = -wWidth + progress * (1.0 + 2 * wWidth);
+
+        const shineGrad = ctx.createLinearGradient(
+          centerX - dx * 0.5, centerY - dy * 0.5,
+          centerX + dx * 0.5, centerY + dy * 0.5
+        );
+
+        const transparent = hexToRgbaStr(sc, 0);
+        const solid = hexToRgbaStr(sc, 0.9);
+
+        const hStart = pos - wWidth;
+        const hCenter = pos;
+        const hEnd = pos + wWidth;
+
+        shineGrad.addColorStop(0, transparent);
+        if (hStart > 0 && hStart < 1) shineGrad.addColorStop(hStart, transparent);
+        if (hCenter >= 0 && hCenter <= 1) shineGrad.addColorStop(hCenter, solid);
+        if (hEnd > 0 && hEnd < 1) shineGrad.addColorStop(hEnd, transparent);
+        shineGrad.addColorStop(1, transparent);
+
+        // 各行の中央揃え描画
+        lines.forEach((line, lineIdx) => {
+          const lineY = startY + lineIdx * lineHeight;
+
+          // 1. 3D立体影
+          for (let d = 1; d <= dDepth; d++) {
+            const totalD = eSize + d;
+            const offX = Math.round(dx3dUnit * totalD);
+            const offY = Math.round(dy3dUnit * totalD);
+            ctx.fillStyle = dColor;
+            ctx.fillText(line, centerX + offX, lineY + offY);
+          }
+
+          // 2. エンボス暗面シャドウ
+          for (let e = 1; e <= eSize; e++) {
+            const sx = Math.round(sxUnit * e);
+            const sy = Math.round(syUnit * e);
+            ctx.fillStyle = eShadow;
+            ctx.fillText(line, centerX + sx, lineY + sy);
+          }
+
+          // 3. エンボス明面ハイライト
+          for (let e = 1; e <= eSize; e++) {
+            const lx = Math.round(lxUnit * e);
+            const ly = Math.round(lyUnit * e);
+            ctx.fillStyle = eLight;
+            ctx.fillText(line, centerX + lx, lineY + ly);
+          }
+
+          // 4. ベース文字本体
+          ctx.fillStyle = baseGrad;
+          ctx.fillText(line, centerX, lineY);
+
+          // 5. 光沢スライド層 (重ね描き)
+          ctx.fillStyle = shineGrad;
+          ctx.fillText(line, centerX, lineY);
+        });
+
+        ctx.restore(); // 変形復元
+
+        const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        const { palette, pixels } = quantizeFrameData(imgData.data, canvasWidth, canvasHeight, eShadow);
+
+        // Graphic Control Extension (透過Index=0)
+        gifBytes.push(0x21, 0xF9, 0x04, 0x09, 12, 0, 0, 0);
+
+        // Image Descriptor
+        gifBytes.push(0x2C, 0x00, 0x00, 0x00, 0x00);
+        gifBytes.push(canvasWidth & 0xFF, (canvasWidth >> 8) & 0xFF);
+        gifBytes.push(canvasHeight & 0xFF, (canvasHeight >> 8) & 0xFF);
+        gifBytes.push(0x87);
+
+        gifBytes.push(...palette);
+
+        const lzwData = encodeLZW(pixels, 8);
+        gifBytes.push(...lzwData);
+
+        const pct = Math.round(((f + 1) / totalFrames) * 100);
+        progressFill.style.width = `${pct}%`;
+        statusMsg.textContent = `高解像度GIFアニメーション生成中... (${pct}%)`;
+        await new Promise(r => setTimeout(r, 10));
+      }
+
+      gifBytes.push(0x3B);
+
+      statusMsg.textContent = 'GIFファイルをダウンロード中...';
+      const gifBlob = new Blob([new Uint8Array(gifBytes)], { type: 'image/gif' });
+
+      const link = document.createElement('a');
+      link.download = `glossy-text-hd.gif`;
+      link.href = URL.createObjectURL(gifBlob);
+      link.click();
+
+      statusMsg.textContent = '✨ 豪華透過GIFの出力が正常に完了しました！';
+      btnExportGif.disabled = false;
+      setTimeout(() => {
+        progressBar.style.display = 'none';
+        statusMsg.style.display = 'none';
+      }, 3000);
+    });
+  </script>
+</body>
+</html>
